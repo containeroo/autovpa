@@ -1,0 +1,70 @@
+---
+name: Unit Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - go.mod
+      - go.sum
+      - Dockerfile.goreleaser
+
+env:
+  KUBERNETES_VERSION: "1.32.0"
+
+jobs:
+  tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Install Dependencies
+        run: |
+          make download
+
+      - name: Create kind cluster
+        run: make kind
+
+      - name: Export kubeconfig for later steps
+        run: |
+          mkdir -p "$HOME/.kube"
+          "${{ github.workspace }}/bin/kind" get kubeconfig --name autovpa-test > "$HOME/.kube/config"
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      - name: Sanity check
+        run: |
+          echo "KUBECONFIG=$KUBECONFIG"
+          "${{ github.workspace }}/bin/kind" get clusters
+
+      - name: Install VPA
+        run: |
+          make install-vpa
+
+      - name: Run Unit Tests
+        run: |
+          make test
+
+      - name: Run E2E Tests
+        run: |
+          make e2e

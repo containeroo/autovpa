@@ -1,0 +1,32 @@
+---
+defaultProfile: default
+profiles:
+  default:
+    updatePolicy:
+      updateMode: Off
+    resourcePolicy:
+      containerPolicies:
+        - containerName: "*"
+          controlledResources: ["cpu", "memory"]
+  safe:
+    # optional per-profile VPA name override
+    nameTemplate: "{{ .WorkloadName }}-vpa"
+    updatePolicy:
+      updateMode: Auto
+    resourcePolicy:
+      containerPolicies:
+        - containerName: "*"
+          controlledResources: ["cpu", "memory"]
+          minAllowed:
+            cpu: 20m
+            memory: 64Mi
+  aggressive:
+    updatePolicy:
+      updateMode: Auto
+    resourcePolicy:
+      containerPolicies:
+        - containerName: "*"
+          controlledResources: ["cpu", "memory"]
+          minAllowed:
+            cpu: 100m
+            memory: 128Mi

@@ -1,0 +1,17 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: autovpa-leader-election
+  namespace: autovpa-system
+  labels:
+    app.kubernetes.io/name: autovpa
+    app.kubernetes.io/component: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: autovpa-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: autovpa
+    namespace: autovpa-system

@@ -1,0 +1,18 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: autovpa-manager
+  namespace: DESTINATION_NAMESPACE
+  labels:
+    app.kubernetes.io/name: autovpa
+    app.kubernetes.io/component: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: autovpa-manager
+subjects:
+  - kind: ServiceAccount
+    name: autovpa
+    namespace: autovpa-system
+# vi: ft=yaml
