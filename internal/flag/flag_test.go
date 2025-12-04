@@ -1,0 +1,302 @@
+/*
+Copyright 2025 containeroo.ch
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package flag
+
+import (
+	"testing"
+
+	"github.com/containeroo/tinyflags"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestHelpRequested(t *testing.T) {
+	t.Run("show version", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := ParseArgs([]string{"--version"}, "1.2.3")
+		require.Error(t, err)
+		assert.True(t, tinyflags.IsVersionRequested(err))
+		assert.EqualError(t, err, "1.2.3")
+	})
+
+	t.Run("show help", func(t *testing.T) {
+		t.Parallel()
+		_, err := ParseArgs([]string{"--help"}, "0.0.0")
+		require.Error(t, err)
+		assert.True(t, tinyflags.IsHelpRequested(err))
+		out := err.Error()
+		assert.Contains(t, out, "Usage: autovpa [flags]")
+	})
+}
+
+func TestParseArgs(t *testing.T) {
+	t.Run("Default values", func(t *testing.T) {
+		args := []string{}
+		opts, err := ParseArgs(args, "0.0.0")
+
+		assert.NoError(t, err)
+		assert.Equal(t, profileAnnotation, opts.ProfileAnnotation)
+		assert.Equal(t, managedLabel, opts.ManagedLabel)
+		assert.False(t, opts.ArgoManaged)
+		assert.Equal(t, ArgoTrackingAnnotation, opts.ArgoTrackingAnnotation)
+		assert.Equal(t, DefaultNameTemplate, opts.DefaultNameTemplate)
+		assert.Equal(t, "config.yaml", opts.ConfigPath)
+		assert.Equal(t, ":8443", opts.MetricsAddr)
+		assert.Equal(t, ":8081", opts.ProbeAddr)
+		assert.True(t, opts.LeaderElection)
+		assert.True(t, opts.EnableMetrics)
+		assert.True(t, opts.SecureMetrics)
+		assert.False(t, opts.EnableHTTP2)
+		assert.Equal(t, "json", opts.LogEncoder)
+		assert.Equal(t, "panic", opts.LogStacktraceLevel)
+		assert.False(t, opts.LogDev)
+	})
+
+	t.Run("Override values", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{
+			"--profile-annotation", "custom.profile",
+			"--disable-crd-check", "true",
+			"--managed-label", "custom.managed",
+			"--argo-managed=true",
+			"--vpa-name-template", "{{ .Namespace }}-{{ .WorkloadName }}",
+			"--config", "/tmp/profiles.yaml",
+			"--metrics-bind-address", ":9090",
+			"--health-probe-bind-address", ":9091",
+			"--leader-elect=true",
+			"--metrics-enabled=false",
+			"--metrics-secure=false",
+			"--enable-http2=false",
+			"--log-encoder", "console",
+			"--log-stacktrace-level", "info",
+			"--log-devel",
+		}
+
+		opts, err := ParseArgs(args, "0.0.0")
+
+		require.NoError(t, err)
+		assert.Equal(t, "custom.profile", opts.ProfileAnnotation)
+		assert.Equal(t, "custom.managed", opts.ManagedLabel)
+		assert.Equal(t, false, opts.CRDCheck)
+		assert.True(t, opts.ArgoManaged)
+		assert.Equal(t, ArgoTrackingAnnotation, opts.ArgoTrackingAnnotation)
+		assert.Equal(t, "{{ .Namespace }}-{{ .WorkloadName }}", opts.DefaultNameTemplate)
+		assert.Equal(t, "/tmp/profiles.yaml", opts.ConfigPath)
+		assert.Equal(t, ":9090", opts.MetricsAddr)
+		assert.Equal(t, ":9091", opts.ProbeAddr)
+		assert.True(t, opts.LeaderElection)
+		assert.False(t, opts.EnableMetrics)
+		assert.False(t, opts.SecureMetrics)
+		assert.False(t, opts.EnableHTTP2)
+		assert.Equal(t, "console", opts.LogEncoder)
+		assert.Equal(t, "info", opts.LogStacktraceLevel)
+		assert.True(t, opts.LogDev)
+	})
+
+	t.Run("Invalid flag", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--invalid-flag"}
+		_, err := ParseArgs(args, "0.0.0")
+
+		require.Error(t, err)
+		assert.EqualError(t, err, "unknown flag: --invalid-flag")
+	})
+
+	t.Run("Test Usage", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--help"}
+		_, err := ParseArgs(args, "0.0.0")
+
+		require.Error(t, err)
+		assert.True(t, tinyflags.IsHelpRequested(err))
+	})
+
+	t.Run("Test Version", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--version"}
+		_, err := ParseArgs(args, "0.0.0")
+
+		require.Error(t, err)
+		assert.True(t, tinyflags.IsVersionRequested(err))
+	})
+
+	t.Run("Multiple namespaces", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--watch-namespace=ns1", "--watch-namespace", "ns2", "--watch-namespace=ns3,ns4"}
+		opts, err := ParseArgs(args, "0.0.0")
+
+		assert.NoError(t, err)
+		assert.Len(t, opts.WatchNamespaces, 4)
+		assert.Equal(t, "ns1", opts.WatchNamespaces[0])
+		assert.Equal(t, "ns2", opts.WatchNamespaces[1])
+		assert.Equal(t, "ns3", opts.WatchNamespaces[2])
+		assert.Equal(t, "ns4", opts.WatchNamespaces[3])
+	})
+
+	t.Run("Multiple namespaces, comma separated", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--watch-namespace", "ns1,ns2"}
+		opts, err := ParseArgs(args, "0.0.0")
+
+		assert.NoError(t, err)
+		assert.Len(t, opts.WatchNamespaces, 2)
+		assert.Equal(t, "ns1", opts.WatchNamespaces[0])
+		assert.Equal(t, "ns2", opts.WatchNamespaces[1])
+	})
+
+	t.Run("Multiple namespaces, mixed", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--watch-namespace", "ns1", "--watch-namespace", "ns2,ns3"}
+		opts, err := ParseArgs(args, "0.0.0")
+
+		assert.NoError(t, err)
+		assert.Len(t, opts.WatchNamespaces, 3)
+		assert.Equal(t, "ns1", opts.WatchNamespaces[0])
+		assert.Equal(t, "ns2", opts.WatchNamespaces[1])
+		assert.Equal(t, "ns3", opts.WatchNamespaces[2])
+	})
+
+	t.Run("Valid metrics listen address (:8080)", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--metrics-bind-address", ":8080"}
+		opts, err := ParseArgs(args, "0.0.0")
+
+		assert.NoError(t, err)
+		assert.Equal(t, ":8080", opts.MetricsAddr)
+	})
+
+	t.Run("Valid metrics listen address (127.0.0.1:8080)", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--metrics-bind-address", "127.0.0.1:8080"}
+		opts, err := ParseArgs(args, "0.0.0")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "127.0.0.1:8080", opts.MetricsAddr)
+	})
+
+	t.Run("Valid metrics listen address (localhost:8080)", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--metrics-bind-address", "localhost:8080"}
+		opts, err := ParseArgs(args, "0.0.0")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "127.0.0.1:8080", opts.MetricsAddr)
+	})
+
+	t.Run("Valid metrics listen address (:80)", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--metrics-bind-address", ":80"}
+		opts, err := ParseArgs(args, "0.0.0")
+
+		assert.NoError(t, err)
+		assert.Equal(t, ":80", opts.MetricsAddr)
+	})
+
+	t.Run("Invalid metrics listen address (invalid)", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--metrics-bind-address", ":invalid"}
+		_, err := ParseArgs(args, "0.0.0")
+		require.Error(t, err)
+		assert.EqualError(t, err, "invalid value for flag --metrics-bind-address: invalid TCP address \":invalid\": lookup tcp/invalid: unknown port.")
+	})
+
+	t.Run("Invalid probes listen address (invalid)", func(t *testing.T) {
+		t.Parallel()
+
+		args := []string{"--health-probe-bind-address", ":invalid"}
+		_, err := ParseArgs(args, "0.0.0")
+		require.Error(t, err)
+		assert.EqualError(t, err, "invalid value for flag --health-probe-bind-address: invalid TCP address \":invalid\": lookup tcp/invalid: unknown port.")
+	})
+}
+
+func TestWasSet(t *testing.T) {
+	t.Parallel()
+	t.Run("WasSet report overrides", func(t *testing.T) {
+		t.Parallel()
+		opts, err := ParseArgs([]string{"--metrics-enabled=false", "--managed-label", "custom/managed", "--watch-namespace", "ns1,ns2"}, "0.0.0")
+		require.NoError(t, err)
+
+		assert.True(t, opts.WasSet("metrics-enabled"))
+		assert.True(t, opts.WasSet("managed-label"))
+		assert.True(t, opts.WasSet("watch-namespace"))
+		assert.False(t, opts.WasSet("leader-elect"))
+	})
+	t.Run("Empty FlagSet", func(t *testing.T) {
+		t.Parallel()
+		opts := Options{}
+		assert.False(t, opts.WasSet("leader-elect"))
+	})
+}
+
+func TestChangedFlags(t *testing.T) {
+	t.Parallel()
+	t.Run("ChangedFlags lists all overrides", func(t *testing.T) {
+		opts, err := ParseArgs([]string{
+			"--metrics-enabled=false",
+			"--metrics-bind-address", ":9090",
+			"--leader-elect=false",
+			"--health-probe-bind-address", ":9091",
+			"--metrics-secure=false",
+			"--enable-http2=true",
+			"--log-encoder", "console",
+			"--log-stacktrace-level", "info",
+			"--log-devel",
+			"--profile-annotation", "x/profile",
+			"--managed-label", "x/managed",
+			"--argo-managed=true",
+			"--vpa-name-template", "{{ .Profile }}-vpa",
+			"--config", "/tmp/cfg",
+			"--disable-crd-check",
+			"--watch-namespace", "ns1,ns2",
+		}, "0.0.0")
+		require.NoError(t, err)
+
+		changed := opts.ChangedFlags()
+		assert.ElementsMatch(t, []string{
+			"metrics-enabled=false",
+			"metrics-bind-address=:9090",
+			"leader-elect=false",
+			"health-probe-bind-address=:9091",
+			"metrics-secure=false",
+			"enable-http2=true",
+			"log-encoder=console",
+			"log-stacktrace-level=info",
+			"log-devel=true",
+			"profile-annotation=x/profile",
+			"managed-label=x/managed",
+			"argo-managed=true",
+			"vpa-name-template={{ .Profile }}-vpa",
+			"config=/tmp/cfg",
+			"disable-crd-check=true",
+			"watch-namespace=ns1,ns2",
+		}, changed)
+	})
+}

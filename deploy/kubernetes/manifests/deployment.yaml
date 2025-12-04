@@ -1,0 +1,69 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autovpa
+  namespace: autovpa-system
+  labels:
+    app.kubernetes.io/name: autovpa
+    app.kubernetes.io/component: controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: autovpa
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: autovpa
+      labels:
+        app.kubernetes.io/name: autovpa
+        app.kubernetes.io/component: controller
+    spec:
+      serviceAccountName: autovpa
+      containers:
+        - name: autovpa
+          image: ghcr.io/containeroo/autovpa:latest
+          ports:
+            - name: metrics
+              containerPort: 8443
+              protocol: TCP
+            - name: probes
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probes
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probes
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: autovpa-config
+              mountPath: /work
+      securityContext:
+        runAsNonRoot: true
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: autovpa-config
+          configMap:
+            name: autovpa-config
+            defaultMode: 0755

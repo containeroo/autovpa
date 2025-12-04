@@ -1,0 +1,31 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: autovpa-alerts
+  namespace: autovpa-system
+spec:
+  groups:
+    - name: autovpa-alerts
+      rules:
+        - alert: AutoVPAMetricsMissing
+          expr: |
+            absent(autovpavpa_created_total)
+            or absent(autovpavpa_updated_total)
+            or absent(autovpavpa_skipped_total)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: AutoVPA metrics missing
+            description: AutoVPA metrics are not being scraped for {{$labels.job}}.
+        - alert: AutoVPASkipsDetected
+          expr: increase(autovpavpa_skipped_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: AutoVPA is skipping workloads
+            description: >-
+              AutoVPA skipped {{ $value }} workload reconciliations in the last 5m
+              (reason={{ $labels.reason }}).
