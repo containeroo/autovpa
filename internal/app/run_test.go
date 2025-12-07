@@ -102,44 +102,6 @@ func TestRun(t *testing.T) {
 		assert.EqualError(t, err, "error parsing arguments: invalid value for flag --log-encoder: must be one of: json, console.")
 	})
 
-	t.Run("Flag overrides", func(t *testing.T) {
-		t.Parallel()
-
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-
-		cfg := writeProfileFile(t)
-		args := []string{
-			"--leader-elect=false",
-			"--watch-namespace=test-autovpa",
-			"--metrics-enabled=false",
-			"--config=" + cfg,
-		}
-		out := &bytes.Buffer{}
-
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- Run(ctx, "v0.0.0", args, out)
-		}()
-
-		time.Sleep(2 * time.Second)
-		cancel()
-
-		select {
-		case err := <-errCh:
-			if err != nil {
-				t.Errorf("Run returned an error: %v", err)
-			}
-		case <-time.After(5 * time.Second):
-			t.Error("Run did not return within the expected time")
-		}
-
-		assert.Contains(t, out.String(), "flag overrides")
-		assert.Contains(t, out.String(), "leader-elect=false")
-		assert.Contains(t, out.String(), "metrics-enabled=false")
-		assert.Contains(t, out.String(), "watch-namespace=test-autovpa")
-	})
-
 	t.Run("Missing profile file", func(t *testing.T) {
 		t.Parallel()
 

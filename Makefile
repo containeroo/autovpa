@@ -29,8 +29,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
 
-# renovate: datasource=github-releases depName=kubernetes/kubernetes
-ENVTEST_K8S_VERSION ?= 1.34.2
+ENVTEST_K8S_VERSION ?= 1.30.0
 # renovate: datasource=github-releases depName=kubernetes-sigs/controller-runtime
 ENVTEST_VERSION ?= release-0.18
 # renovate: datasource=github-releases depName=golangci/golangci-lint
@@ -62,14 +61,17 @@ VERSION = $(shell [ -n "$(LATEST_TAG)" ] && echo $(LATEST_TAG) | sed "s/^$(VERSI
 
 patch: ## Create a new patch release (x.y.Z+1)
 	@NEW_VERSION=$$(echo "$(VERSION)" | awk -F. '{printf "%d.%d.%d", $$1, $$2, $$3+1}') && \
+	git tag "$(VERSION_PREFIX)$${NEW_VERSION}" && \
 	echo "Tagged $(VERSION_PREFIX)$${NEW_VERSION}"
 
 minor: ## Create a new minor release (x.Y+1.0)
 	@NEW_VERSION=$$(echo "$(VERSION)" | awk -F. '{printf "%d.%d.0", $$1, $$2+1}') && \
+	git tag "$(VERSION_PREFIX)$${NEW_VERSION}" && \
 	echo "Tagged $(VERSION_PREFIX)$${NEW_VERSION}"
 
 major: ## Create a new major release (X+1.0.0)
 	@NEW_VERSION=$$(echo "$(VERSION)" | awk -F. '{printf "%d.0.0", $$1+1}') && \
+	git tag "$(VERSION_PREFIX)$${NEW_VERSION}" && \
 	echo "Tagged $(VERSION_PREFIX)$${NEW_VERSION}"
 
 tag: ## Show latest tag
@@ -77,6 +79,7 @@ tag: ## Show latest tag
 
 push: ## Push tags to remote
 	git push --tags
+
 
 ##@ Development
 
@@ -218,9 +221,22 @@ install-vpa: ## Install the Vertical Pod Autoscaler CRDs and components into the
 		echo "Downloading VPA release archive $(VPA_VERSION)..."; \
 		curl -fsSL https://github.com/kubernetes/autoscaler/archive/refs/tags/$(VPA_VERSION).zip -o $$TMP_DIR/vpa.zip; \
 		unzip -q $$TMP_DIR/vpa.zip -d $$TMP_DIR; \
-		echo "Applying VPA manifests..."; \
-		kubectl apply -f $$TMP_DIR/autoscaler-$(VPA_VERSION)/vertical-pod-autoscaler/deploy/; \
-		rm -rf $$TMP_DIR
+		VPA_DIR=$$TMP_DIR/autoscaler-$(VPA_VERSION)/vertical-pod-autoscaler/deploy; \
+			echo "Applying CRDs with validation disabled"; \
+			kubectl apply --validate=false -f $$VPA_DIR/vpa-v1-crd-gen.yaml; \
+			echo "Applying remaining resources"; \
+		for resource in \
+				admission-controller-deployment.yaml \
+				admission-controller-service.yaml \
+				recommender-deployment.yaml \
+				recommender-deployment-low.yaml \
+				recommender-deployment-high.yaml \
+				updater-deployment.yaml \
+				vpa-rbac.yaml; do \
+			kubectl apply -f "$$VPA_DIR/$$resource"; \
+		done; \
+		echo $$VPA_DIR; \
+		#rm -rf $$TMP_DIR
 	@echo "VPA installation complete."
 
 .PHONY: ginkgo
