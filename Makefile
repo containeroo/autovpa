@@ -137,6 +137,10 @@ e2e-argo-disabled: ## Run only Argo tracking disabled e2e tests
 e2e-argo-enabled: ## Run only Argo tracking enabled e2e tests
 	@$(MAKE) e2e FOCUS="Argo tracking enabled"
 
+.PHONY: e2e-namespaced
+e2e-namespaced: ## Run only Namespaced mode e2e tests
+	@$(MAKE) e2e FOCUS="Namespaced mode"
+
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter.
 	$(GOLANGCI_LINT) run
