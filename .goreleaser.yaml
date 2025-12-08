@@ -1,5 +1,6 @@
 ---
 project_name: AutoVPA
+version: 2
 before:
   hooks:
     - go mod tidy
@@ -14,54 +15,29 @@ builds:
       - -s -w
       - -X main.Version={{ .Tag }}
       - -X main.Commit={{ .FullCommit }}
-dockers:
-  - ids: [autovpa] # tie this docker image to the 'autovpa' build
+dockers_v2:
+  - builds: [autovpa]
     use: buildx
     dockerfile: Dockerfile.goreleaser
-    image_templates:
-      - ghcr.io/containeroo/autovpa:{{ .Tag }}-amd64
+    platforms: [linux/amd64, linux/arm64]
+    images:
+      - ghcr.io/containeroo/autovpa
+    tags:
+      - "{{ .Tag }}"
+      - latest
+    labels:
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.description: "{{ .ProjectName }}"
+      org.opencontainers.image.url: https://github.com/containeroo/autovpa
+      org.opencontainers.image.source: https://github.com/containeroo/autovpa
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.created: '{{ time "2006-01-02T15:04:05Z07:00" }}'
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: "GNU General Public License v3.0"
     build_flag_templates:
       - --pull
-      - --platform=linux/amd64
       - --build-arg
       - LDFLAGS=-s -w -X main.Version={{ .Tag }} -X main.Commit={{ .FullCommit }}
-      - --label=org.opencontainers.image.title={{ .ProjectName }}
-      - --label=org.opencontainers.image.description={{ .ProjectName }}
-      - --label=org.opencontainers.image.url=https://github.com/containeroo/autovpa
-      - --label=org.opencontainers.image.source=https://github.com/containeroo/autovpa
-      - --label=org.opencontainers.image.version={{ .Version }}
-      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
-      - --label=org.opencontainers.image.revision={{ .FullCommit }}
-      - --label=org.opencontainers.image.licenses="GNU General Public License v3.0"
-
-  - ids: [autovpa]
-    use: buildx
-    dockerfile: Dockerfile.goreleaser
-    image_templates:
-      - ghcr.io/containeroo/autovpa:{{ .Tag }}-arm64
-    build_flag_templates:
-      - --pull
-      - --platform=linux/arm64
-      - --build-arg
-      - LDFLAGS=-s -w -X main.Version={{ .Tag }} -X main.Commit={{ .FullCommit }}
-      - --label=org.opencontainers.image.title={{ .ProjectName }}
-      - --label=org.opencontainers.image.description={{ .ProjectName }}
-      - --label=org.opencontainers.image.url=https://github.com/containeroo/autovpa
-      - --label=org.opencontainers.image.source=https://github.com/containeroo/autovpa
-      - --label=org.opencontainers.image.version={{ .Version }}
-      - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
-      - --label=org.opencontainers.image.revision={{ .FullCommit }}
-      - --label=org.opencontainers.image.licenses="GNU General Public License v3.0"
-
-docker_manifests:
-  - name_template: ghcr.io/containeroo/autovpa:{{ .Tag }}
-    image_templates:
-      - ghcr.io/containeroo/autovpa:{{ .Tag }}-amd64
-      - ghcr.io/containeroo/autovpa:{{ .Tag }}-arm64
-  - name_template: ghcr.io/containeroo/autovpa:latest
-    image_templates:
-      - ghcr.io/containeroo/autovpa:{{ .Tag }}-amd64
-      - ghcr.io/containeroo/autovpa:{{ .Tag }}-arm64
 
 archives:
   - formats: ["tar.gz"]
