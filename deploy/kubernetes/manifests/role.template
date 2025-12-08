@@ -19,6 +19,14 @@ rules:
       - daemonsets
       - deployments
       - statefulsets
+    verbs:
+      - get
+      - list
+      - patch
+      - watch
+  - apiGroups:
+      - autoscaling.k8s.io
+    resources:
       - verticalpodautoscalers
     verbs:
       - get
@@ -26,4 +34,3 @@ rules:
       - patch
       - watch
 # vi: ft=yaml
-
