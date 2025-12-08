@@ -23,6 +23,7 @@ import (
 	"github.com/containeroo/autovpa/internal/config"
 	"github.com/containeroo/autovpa/internal/flag"
 	"github.com/containeroo/autovpa/internal/metrics"
+	"github.com/containeroo/autovpa/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -167,8 +168,9 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		_, err := reconciler.ReconcileWorkload(ctx, dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))
 		require.NoError(t, err)
 
+		vpaName := renderDeploymentVPAName(t, "ns1", dep.GetName(), "p1")
 		vpa := newVPAObject()
-		err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, vpa)
+		err = client.Get(ctx, types.NamespacedName{Name: vpaName, Namespace: "ns1"}, vpa)
 		require.NoError(t, err)
 
 		labels := vpa.GetLabels()
@@ -195,7 +197,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		managed := true
 		existing := newVPAObject()
 		existing.SetNamespace("ns1")
-		existing.SetName("demo-legacy")
+		legacyName := "legacy-demo"
+		existing.SetName(legacyName)
 		existing.SetLabels(map[string]string{"vpa/managed": "true"})
 		existing.SetOwnerReferences([]metav1.OwnerReference{
 			{
@@ -245,11 +248,12 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		require.NoError(t, err)
 
 		// old VPA should be deleted
-		err = client.Get(ctx, types.NamespacedName{Name: "demo-legacy", Namespace: "ns1"}, newVPAObject())
+		err = client.Get(ctx, types.NamespacedName{Name: legacyName, Namespace: "ns1"}, newVPAObject())
 		require.True(t, apierrors.IsNotFound(err))
 
+		newVPAName := renderDeploymentVPAName(t, "ns1", dep.GetName(), "p2")
 		// new VPA with desired name should exist
-		err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, newVPAObject())
+		err = client.Get(ctx, types.NamespacedName{Name: newVPAName, Namespace: "ns1"}, newVPAObject())
 		require.NoError(t, err)
 	})
 	t.Run("Creates VPA with Argo tracking annotation when enabled and present", func(t *testing.T) {
@@ -295,8 +299,9 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		_, err := reconciler.ReconcileWorkload(ctx, dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))
 		require.NoError(t, err)
 
+		vpaName := renderDeploymentVPAName(t, "ns1", dep.GetName(), "p1")
 		vpa := newVPAObject()
-		err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, vpa)
+		err = client.Get(ctx, types.NamespacedName{Name: vpaName, Namespace: "ns1"}, vpa)
 		require.NoError(t, err)
 
 		annotations := vpa.GetAnnotations()
@@ -309,7 +314,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 
 		existing := newVPAObject()
 		existing.SetNamespace("ns1")
-		existing.SetName("demo-vpa")
+		vpaName := renderDeploymentVPAName(t, "ns1", "demo", "p1")
+		existing.SetName(vpaName)
 		existing.SetLabels(map[string]string{"old": "label"})
 		existing.Object["spec"] = map[string]any{
 			"targetRef": map[string]any{
@@ -360,7 +366,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		require.NoError(t, err)
 
 		vpa := newVPAObject()
-		err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, vpa)
+		err = client.Get(ctx, types.NamespacedName{Name: vpaName, Namespace: "ns1"}, vpa)
 		require.NoError(t, err)
 
 		spec := vpa.Object["spec"].(map[string]any)
@@ -384,7 +390,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		managed := true
 		vpa := newVPAObject()
 		vpa.SetNamespace("ns1")
-		vpa.SetName("demo-vpa")
+		vpaName := renderDeploymentVPAName(t, "ns1", dep.GetName(), "p1")
+		vpa.SetName(vpaName)
 		vpa.SetLabels(map[string]string{"vpa/managed": "true"})
 		vpa.SetOwnerReferences([]metav1.OwnerReference{
 			{
@@ -424,7 +431,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		_, err := reconciler.ReconcileWorkload(ctx, dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))
 		require.NoError(t, err)
 
-		err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, vpa)
+		err = client.Get(ctx, types.NamespacedName{Name: vpaName, Namespace: "ns1"}, vpa)
 		assert.True(t, apierrors.IsNotFound(err))
 	})
 }
@@ -460,4 +467,16 @@ func readCounter(t *testing.T, c prometheus.Collector) int {
 func updateModePtr(t *testing.T, mode vpaautoscaling.UpdateMode) *vpaautoscaling.UpdateMode {
 	t.Helper()
 	return &mode
+}
+
+func renderDeploymentVPAName(t *testing.T, namespace, workloadName, profile string) string {
+	t.Helper()
+	vpaName, err := RenderVPAName(flag.DefaultNameTemplate, utils.NameTemplateData{
+		WorkloadName: workloadName,
+		Namespace:    namespace,
+		Kind:         "Deployment",
+		Profile:      profile,
+	})
+	require.NoError(t, err)
+	return vpaName
 }
