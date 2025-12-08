@@ -3,7 +3,6 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: autovpa-alerts
-  namespace: autovpa-system
 spec:
   groups:
     - name: autovpa-alerts

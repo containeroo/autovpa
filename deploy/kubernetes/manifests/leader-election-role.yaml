@@ -3,7 +3,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: autovpa-leader-election
-  namespace: autovpa-system
   labels:
     app.kubernetes.io/name: autovpa
     app.kubernetes.io/component: controller

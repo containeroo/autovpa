@@ -3,7 +3,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: autovpa-manager
-  namespace: DESTINATION_NAMESPACE
 rules:
   - apiGroups:
       - ""
@@ -19,6 +18,9 @@ rules:
       - daemonsets
       - deployments
       - statefulsets
+      - daemonsets/finalizers
+      - deployments/finalizers
+      - statefulsets/finalizers
     verbs:
       - create
       - delete

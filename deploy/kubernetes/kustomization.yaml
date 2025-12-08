@@ -16,7 +16,6 @@ resources:
   - manifests/serviceaccount.yaml
 configMapGenerator:
   - name: autovpa-config
-    namespace: autovpa-system
     files:
       - ./config.yaml
 generatorOptions:

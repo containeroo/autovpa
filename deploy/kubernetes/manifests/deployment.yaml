@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: autovpa
-  namespace: autovpa-system
   labels:
     app.kubernetes.io/name: autovpa
     app.kubernetes.io/component: controller
@@ -25,6 +24,12 @@ spec:
       containers:
         - name: autovpa
           image: ghcr.io/containeroo/autovpa:latest
+          # Uncomment to watch in the current namespace
+          # env:
+          #   - name: AUTO_VPA_WATCH_NAMESPACE
+          #     valueFrom:
+          #       fieldRef:
+          #         fieldPath: metadata.namespace
           ports:
             - name: metrics
               containerPort: 8443
