@@ -29,7 +29,7 @@ const (
 	profileAnnotation      string = "autovpa.containeroo.ch/profile"
 	managedLabel           string = "autovpa.containeroo.ch/managed"
 	ArgoTrackingAnnotation string = "argocd.argoproj.io/tracking-id"
-	DefaultNameTemplate    string = "{{ .WorkloadName }}-vpa"
+	DefaultNameTemplate    string = "{{ .WorkloadName }}-{{ .Profile }}-vpa"
 )
 
 // Options holds all configuration options for the application.
