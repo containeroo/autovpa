@@ -18,6 +18,7 @@ rules:
       - daemonsets
       - deployments
       - statefulsets
+      - verticalpodautoscalers
     verbs:
       - get
       - list
