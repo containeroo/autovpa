@@ -29,8 +29,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
 
-# renovate: datasource=github-releases depName=kubernetes/kubernetes
-ENVTEST_K8S_VERSION ?= 1.34.2
+ENVTEST_K8S_VERSION ?= 1.30.0
 # renovate: datasource=github-releases depName=kubernetes-sigs/controller-runtime
 ENVTEST_VERSION ?= release-0.18
 # renovate: datasource=github-releases depName=golangci/golangci-lint
