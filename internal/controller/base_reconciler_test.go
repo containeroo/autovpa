@@ -65,8 +65,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			Logger:     &logger,
 			Recorder:   rec,
 			Meta: MetaConfig{
-				ProfileAnnotation: "vpa/profile",
-				ManagedLabel:      "vpa/managed",
+				ProfileKey:   "vpa/profile",
+				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
 				Profiles:       cfg.Profiles,
@@ -107,8 +107,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			Logger:     &logger,
 			Recorder:   rec,
 			Meta: MetaConfig{
-				ProfileAnnotation: "vpa/profile",
-				ManagedLabel:      "vpa/managed",
+				ProfileKey:   "vpa/profile",
+				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
 				Profiles:       cfg.Profiles,
@@ -130,6 +130,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		require.Equal(t, 1, got)
 		assert.Len(t, rec.Events, 1)
 	})
+
 	t.Run("Creates VPA", func(t *testing.T) {
 		resetMetrics(t)
 		ctx := context.Background()
@@ -150,8 +151,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			Logger:     &logger,
 			Recorder:   rec,
 			Meta: MetaConfig{
-				ProfileAnnotation: "vpa/profile",
-				ManagedLabel:      "vpa/managed",
+				ProfileKey:   "vpa/profile",
+				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
 				Profiles:       cfg.Profiles,
@@ -174,6 +175,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		require.NoError(t, err)
 
 		labels := vpa.GetLabels()
+		assert.Equal(t, "p1", labels["vpa/profile"])
 		assert.Equal(t, "true", labels["vpa/managed"])
 
 		spec := vpa.Object["spec"].(map[string]any)
@@ -184,6 +186,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		got := readCounter(t, metrics.VPACreated.WithLabelValues("ns1", "demo", "Deployment", "p1"))
 		assert.Equal(t, 1, got)
 	})
+
 	t.Run("Deletes obsolete managed VPA when name changes", func(t *testing.T) {
 		resetMetrics(t)
 		ctx := context.Background()
@@ -234,8 +237,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			Logger:     &logger,
 			Recorder:   rec,
 			Meta: MetaConfig{
-				ProfileAnnotation: "vpa/profile",
-				ManagedLabel:      "vpa/managed",
+				ProfileKey:   "vpa/profile",
+				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
 				Profiles:       cfg.Profiles,
@@ -256,6 +259,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		err = client.Get(ctx, types.NamespacedName{Name: newVPAName, Namespace: "ns1"}, newVPAObject())
 		require.NoError(t, err)
 	})
+
 	t.Run("Creates VPA with Argo tracking annotation when enabled and present", func(t *testing.T) {
 		resetMetrics(t)
 		ctx := context.Background()
@@ -276,7 +280,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			Logger:     &logger,
 			Recorder:   rec,
 			Meta: MetaConfig{
-				ProfileAnnotation:      "vpa/profile",
+				ProfileKey:             "vpa/profile",
 				ManagedLabel:           "vpa/managed",
 				ArgoManaged:            true,
 				ArgoTrackingAnnotation: flag.ArgoTrackingAnnotation,
@@ -307,6 +311,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		annotations := vpa.GetAnnotations()
 		assert.Equal(t, "myapp", annotations["argocd.argoproj.io/tracking-id"])
 	})
+
 	t.Run("Updates VPA", func(t *testing.T) {
 		resetMetrics(t)
 		ctx := context.Background()
@@ -347,8 +352,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			Logger:     &logger,
 			Recorder:   rec,
 			Meta: MetaConfig{
-				ProfileAnnotation: "vpa/profile",
-				ManagedLabel:      "vpa/managed",
+				ProfileKey:   "vpa/profile",
+				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
 				Profiles:       cfg.Profiles,
@@ -418,8 +423,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			Logger:     &logger,
 			Recorder:   rec,
 			Meta: MetaConfig{
-				ProfileAnnotation: "vpa/profile",
-				ManagedLabel:      "vpa/managed",
+				ProfileKey:   "vpa/profile",
+				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
 				Profiles:       cfg.Profiles,

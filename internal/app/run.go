@@ -82,7 +82,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 
 	// Metadata config
 	metaCfg := controller.MetaConfig{
-		ProfileAnnotation:      flags.ProfileAnnotation,
+		ProfileKey:             flags.ProfileAnnotation,
 		ManagedLabel:           flags.ManagedLabel,
 		ArgoManaged:            flags.ArgoManaged,
 		ArgoTrackingAnnotation: flags.ArgoTrackingAnnotation,
@@ -209,6 +209,16 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		},
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create DaemonSet controller: %w", err)
+	}
+
+	// Setup VPA controller
+	if err := (&controller.VPAReconciler{
+		Logger:     &logger,
+		KubeClient: mgr.GetClient(),
+		Recorder:   mgr.GetEventRecorderFor("vpa-controller"),
+		Meta:       metaCfg,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create VPA controlle: %w", err)
 	}
 
 	// Register health and readiness checks

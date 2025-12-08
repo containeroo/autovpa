@@ -141,6 +141,10 @@ e2e-argo-enabled: ## Run only Argo tracking enabled e2e tests
 e2e-namespaced: ## Run only Namespaced mode e2e tests
 	@$(MAKE) e2e FOCUS="Namespaced mode"
 
+.PHONY: e2e-vpa
+e2e-vpa: ## Run only VPA e2e tests
+	@$(MAKE) e2e FOCUS="VPA Generic"
+
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter.
 	$(GOLANGCI_LINT) run

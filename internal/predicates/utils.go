@@ -32,3 +32,18 @@ func hasAnnotation(obj client.Object, annotation string) bool {
 	}
 	return false
 }
+
+// hasLabel returns true if object contains the specified label.
+func hasLabel(obj client.Object, label string) bool {
+	if obj == nil {
+		return false
+	}
+	objLabels := obj.GetLabels()
+	if objLabels == nil {
+		return false
+	}
+	if _, ok := objLabels[label]; ok {
+		return true
+	}
+	return false
+}

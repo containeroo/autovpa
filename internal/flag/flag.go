@@ -51,6 +51,7 @@ type Options struct {
 	DefaultNameTemplate    string   // Template used to render managed VPA names; can be overridden per profile.
 	ConfigPath             string   // Path to the Config containing VPA profiles.
 	CRDCheck               bool     // Enable the check for the VPA CRD.
+	SkipManagerStart       bool     // Skip starting the manager (used by tests).
 
 	fs *tinyflags.FlagSet // parsed flagset (for changed-state queries)
 }
@@ -121,6 +122,9 @@ func ParseArgs(args []string, version string) (Options, error) {
 		Value()
 	tf.BoolVar(&options.LeaderElection, "leader-elect", true, "Enable leader election").
 		Strict().
+		HideAllowed().
+		Value()
+	tf.BoolVar(&options.SkipManagerStart, "skip-manager-start", false, "Skip starting the manager (tests only)").
 		HideAllowed().
 		Value()
 

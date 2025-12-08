@@ -26,43 +26,86 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// DeploymentReconciler reconciles Deployments to detect restarts and target reloads.
+// DeploymentReconciler reconciles Deployments and manages their VPAs.
+//
+// Its responsibilities are:
+//
+//   - Drive the *desired VPA state* for Deployments by delegating to
+//     BaseReconciler.ReconcileWorkload.
+//   - Perform cleanup of managed VPAs when a Deployment is deleted.
+//
+// Actual VPA content (name, labels, spec) is resolved by the shared
+// BaseReconciler logic; this controller only wires that logic to the
+// Deployment API type.
 type DeploymentReconciler struct {
 	BaseReconciler
 }
 
-// Reconcile handles the reconciliation logic when a Deployment is updated.
+// Reconcile ensures that the Deployment's opted-in state (profile annotation)
+// is reflected in its managed VPAs.
+//
+// High-level flow:
+//
+//  1. Try to load the Deployment.
+//     - If it does not exist anymore, proactively delete any managed VPAs
+//     that still point at this Deployment (best-effort cleanup).
+//  2. If it exists, delegate to ReconcileWorkload to create/update/delete
+//     the associated VPA based on the selected profile.
 func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// Fetch the Deployment instance
+	// Fetch the current Deployment object from the cache/API server.
 	dep := &appsv1.Deployment{}
 	if err := r.KubeClient.Get(ctx, req.NamespacedName, dep); err != nil {
 		if apierrors.IsNotFound(err) {
+			// The Deployment has been deleted. We may still have managed VPAs
+			// with an ownerRef pointing at this name/namespace; clean them up.
 			logger.Info("Deployment not found; cleaning managed VPAs if any")
-			if err := r.purgeManagedVPAsForWorkload(ctx, &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: req.Namespace,
-					Name:      req.Name,
+
+			if err := r.DeleteAllManagedVPAsForWorkload(
+				ctx,
+				&appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: req.Namespace,
+						Name:      req.Name,
+					},
 				},
-			}, DeploymentGVK.Kind); err != nil {
+				DeploymentGVK.Kind,
+			); err != nil {
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
 		}
+
+		// Any non-NotFound error should be retried by controller-runtime.
 		return ctrl.Result{}, errors.New("failed to fetch Deployment")
 	}
 
+	// Deployment exists: reconcile its VPA according to the selected profile.
 	return r.ReconcileWorkload(ctx, dep, DeploymentGVK)
 }
 
-// SetupWithManager sets up the controller with the Manager.
+// SetupWithManager wires the Deployment controller into the manager.
+//   - Deployment events are filtered by the profile annotation lifecycle.
+//   - Owned VPA events are not filtered by that annotation, so changes to a
+//     managed VPA still requeue the owning Deployment.
 func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	vpa := newVPAObject()
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&appsv1.Deployment{}).
-		WithEventFilter(predicates.AnnotationLifecycle(r.Meta.ProfileAnnotation)).
+		// Primary resource: only react when the profile annotation is added/removed/present.
+		For(&appsv1.Deployment{}, builder.WithPredicates(
+			predicates.ProfileAnnotationLifecycle(r.Meta.ProfileKey),
+		)).
+		// Secondary resource: any change to a managed VPA should requeue the owner.
+		// We use a label-based predicate here so only VPAs with the managed label
+		// generate events for this controller.
+		Owns(vpa, builder.WithPredicates(
+			predicates.ManagedVPALifecycle(r.Meta.ManagedLabel),
+		)).
 		Complete(r)
 }
