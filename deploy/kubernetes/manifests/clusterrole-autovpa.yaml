@@ -19,17 +19,22 @@ rules:
       - deployments
       - statefulsets
     verbs:
+      - create
+      - delete
       - get
       - list
       - patch
+      - update
       - watch
   - apiGroups:
       - autoscaling.k8s.io
     resources:
       - verticalpodautoscalers
     verbs:
+      - create
+      - delete
       - get
       - list
-      - create
       - patch
+      - update
       - watch
