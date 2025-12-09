@@ -33,9 +33,9 @@ type MetaConfig struct {
 // ProfileConfig wraps profile data shared across reconcilers.
 // It supplies the available profiles, default profile, and default name template.
 type ProfileConfig struct {
-	Profiles       map[string]config.Profile // All available profiles keyed by name.
-	DefaultProfile string                    // Default profile name to use when annotation selects "default".
-	NameTemplate   string                    // Default VPA name template when a profile does not override.
+	NameTemplate string                    // Default VPA name template when a profile does not override.
+	Default      string                    // Default profile name to use when annotation selects "default".
+	Entries      map[string]config.Profile // All available profiles keyed by name.
 }
 
 var (

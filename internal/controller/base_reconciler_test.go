@@ -69,9 +69,9 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flag.DefaultNameTemplate,
+				Entries:      cfg.Profiles,
+				Default:      cfg.DefaultProfile,
+				NameTemplate: flag.DefaultNameTemplate,
 			},
 		}
 
@@ -111,9 +111,9 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flag.DefaultNameTemplate,
+				Entries:      cfg.Profiles,
+				Default:      cfg.DefaultProfile,
+				NameTemplate: flag.DefaultNameTemplate,
 			},
 		}
 
@@ -155,9 +155,9 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flag.DefaultNameTemplate,
+				Entries:      cfg.Profiles,
+				Default:      cfg.DefaultProfile,
+				NameTemplate: flag.DefaultNameTemplate,
 			},
 		}
 
@@ -241,9 +241,9 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flag.DefaultNameTemplate,
+				Entries:      cfg.Profiles,
+				Default:      cfg.DefaultProfile,
+				NameTemplate: flag.DefaultNameTemplate,
 			},
 		}
 
@@ -304,9 +304,9 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flag.DefaultNameTemplate,
+				Entries:      cfg.Profiles,
+				Default:      cfg.DefaultProfile,
+				NameTemplate: flag.DefaultNameTemplate,
 			},
 		}
 
@@ -375,9 +375,9 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				ManagedLabel: "vpa/managed",
 			},
 			Profiles: ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flag.DefaultNameTemplate,
+				Entries:      cfg.Profiles,
+				Default:      cfg.DefaultProfile,
+				NameTemplate: flag.DefaultNameTemplate,
 			},
 		}
 

@@ -104,8 +104,8 @@ func (b *BaseReconciler) ReconcileWorkload(
 	}
 
 	// Resolve profile (fall back to default if annotation is "default"/empty).
-	selectedProfile := utils.DefaultIfZero(profileName, b.Profiles.DefaultProfile)
-	profile, found := b.Profiles.Profiles[selectedProfile]
+	selectedProfile := utils.DefaultIfZero(profileName, b.Profiles.Default)
+	profile, found := b.Profiles.Entries[selectedProfile]
 	if !found {
 		// Invalid configuration: profile doesn't exist. This is surfaced as an
 		// Event and metric, but we do not requeue to avoid hot-looping until
