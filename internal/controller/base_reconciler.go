@@ -195,6 +195,86 @@ func (b *BaseReconciler) ReconcileWorkload(
 	return ctrl.Result{}, nil
 }
 
+// DeleteObsoleteManagedVPAs deletes all managed VPAs owned by `owner` except
+// the one named keepName. This handles profile/name-template changes.
+func (b *BaseReconciler) DeleteObsoleteManagedVPAs(ctx context.Context, owner client.Object, keepName string) error {
+	vpas, err := b.listManagedVPAs(ctx, owner.GetNamespace())
+	if err != nil {
+		return err
+	}
+
+	for _, vpa := range vpas {
+		if vpa.GetName() == keepName {
+			continue
+		}
+		// Only consider VPAs actually owned by this workload.
+		if !metav1.IsControlledBy(vpa, owner) {
+			continue
+		}
+
+		// When here, we know that the VPA is owned by the workload and the VPA name
+		// has changed. Most likely the profile or name template changed, so the VPA
+		// is obsolete and should be removed.
+		if err := b.KubeClient.Delete(ctx, vpa); err != nil {
+			return fmt.Errorf("delete obsolete VPA %s: %w", vpa.GetName(), err)
+		}
+
+		b.Logger.Info("deleted obsolete VPA",
+			"vpa", vpa.GetName(),
+			"namespace", owner.GetNamespace(),
+			"workload", owner.GetName(),
+		)
+
+		b.Recorder.Eventf(
+			owner,
+			corev1.EventTypeNormal,
+			"DeletedObsoleteVPA",
+			"Deleted obsolete VPA %s", vpa.GetName(),
+		)
+	}
+
+	return nil
+}
+
+// DeleteAllManagedVPAsForWorkload deletes every operator-managed VPA that is
+// owned by the specified workload. This is used when a workload:
+//   - is deleted
+//   - removes its profile annotation
+//   - or otherwise opts out of VPA management
+func (b *BaseReconciler) DeleteAllManagedVPAsForWorkload(ctx context.Context, owner client.Object, workloadKind string) error {
+	vpas, err := b.listManagedVPAs(ctx, owner.GetNamespace())
+	if err != nil {
+		return err
+	}
+
+	for _, vpa := range vpas {
+		for _, ref := range vpa.GetOwnerReferences() {
+			if ref.Kind != workloadKind || ref.Name != owner.GetName() {
+				continue
+			}
+
+			if err := b.KubeClient.Delete(ctx, vpa); err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("delete VPA %s: %w", vpa.GetName(), err)
+			}
+
+			b.Logger.Info("deleted managed VPA for workload",
+				"vpa", vpa.GetName(),
+				"namespace", owner.GetNamespace(),
+				"workload", owner.GetName(),
+			)
+
+			b.Recorder.Eventf(
+				owner,
+				corev1.EventTypeNormal,
+				"DeletedManagedVPA",
+				"Deleted managed VPA %s for workload %s", vpa.GetName(), owner.GetName(),
+			)
+		}
+	}
+
+	return nil
+}
+
 // buildDesiredVPA resolves the target VPA name, labels, and spec
 // according to the selected profile and operator configuration.
 func (b *BaseReconciler) buildDesiredVPA(
@@ -323,84 +403,4 @@ func (b *BaseReconciler) listManagedVPAs(ctx context.Context, namespace string) 
 		res[i] = &list.Items[i]
 	}
 	return res, nil
-}
-
-// DeleteObsoleteManagedVPAs deletes all managed VPAs owned by `owner` except
-// the one named keepName. This handles profile/name-template changes.
-func (b *BaseReconciler) DeleteObsoleteManagedVPAs(ctx context.Context, owner client.Object, keepName string) error {
-	vpas, err := b.listManagedVPAs(ctx, owner.GetNamespace())
-	if err != nil {
-		return err
-	}
-
-	for _, vpa := range vpas {
-		if vpa.GetName() == keepName {
-			continue
-		}
-		// Only consider VPAs actually owned by this workload.
-		if !metav1.IsControlledBy(vpa, owner) {
-			continue
-		}
-
-		// When here, we know that the VPA is owned by the workload and the VPA name
-		// has changed. Most likely the profile or name template changed, so the VPA
-		// is obsolete and should be removed.
-		if err := b.KubeClient.Delete(ctx, vpa); err != nil {
-			return fmt.Errorf("delete obsolete VPA %s: %w", vpa.GetName(), err)
-		}
-
-		b.Logger.Info("deleted obsolete VPA",
-			"vpa", vpa.GetName(),
-			"namespace", owner.GetNamespace(),
-			"workload", owner.GetName(),
-		)
-
-		b.Recorder.Eventf(
-			owner,
-			corev1.EventTypeNormal,
-			"DeletedObsoleteVPA",
-			"Deleted obsolete VPA %s", vpa.GetName(),
-		)
-	}
-
-	return nil
-}
-
-// DeleteAllManagedVPAsForWorkload deletes every operator-managed VPA that is
-// owned by the specified workload. This is used when a workload:
-//   - is deleted
-//   - removes its profile annotation
-//   - or otherwise opts out of VPA management
-func (b *BaseReconciler) DeleteAllManagedVPAsForWorkload(ctx context.Context, owner client.Object, workloadKind string) error {
-	vpas, err := b.listManagedVPAs(ctx, owner.GetNamespace())
-	if err != nil {
-		return err
-	}
-
-	for _, vpa := range vpas {
-		for _, ref := range vpa.GetOwnerReferences() {
-			if ref.Kind != workloadKind || ref.Name != owner.GetName() {
-				continue
-			}
-
-			if err := b.KubeClient.Delete(ctx, vpa); err != nil && !apierrors.IsNotFound(err) {
-				return fmt.Errorf("delete VPA %s: %w", vpa.GetName(), err)
-			}
-
-			b.Logger.Info("deleted managed VPA for workload",
-				"vpa", vpa.GetName(),
-				"namespace", owner.GetNamespace(),
-				"workload", owner.GetName(),
-			)
-
-			b.Recorder.Eventf(
-				owner,
-				corev1.EventTypeNormal,
-				"DeletedManagedVPA",
-				"Deleted managed VPA %s for workload %s", vpa.GetName(), owner.GetName(),
-			)
-		}
-	}
-
-	return nil
 }

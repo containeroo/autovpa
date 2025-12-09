@@ -134,6 +134,22 @@ func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager configures this controller to watch VPAs with the managed label.
+//
+// We filter events using ManagedVPALifecycle so the reconciler only receives
+// meaningful transitions (creation, deletion, or managed-label changes) and avoids
+// unnecessary noise.
+func (r *VPAReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	vpa := newVPAObject()
+
+	return ctrl.NewControllerManagedBy(mgr).
+		// Primary resource.
+		For(vpa).
+		// Only care about VPAs we mark as managed.
+		WithEventFilter(predicates.ManagedVPALifecycle(r.Meta.ManagedLabel)).
+		Complete(r)
+}
+
 // resolveOwnerGVK inspects controller ownerRefs and returns the GVK + name of
 // the owner workload. Only Deployment/StatefulSet/DaemonSet owners are supported.
 func (r *VPAReconciler) resolveOwnerGVK(
@@ -202,20 +218,4 @@ func (r *VPAReconciler) deleteManagedVPA(ctx context.Context, vpa client.Object)
 		return err
 	}
 	return nil
-}
-
-// SetupWithManager configures this controller to watch VPAs with the managed label.
-//
-// We filter events using ManagedVPALifecycle so the reconciler only receives
-// meaningful transitions (creation, deletion, or managed-label changes) and avoids
-// unnecessary noise.
-func (r *VPAReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	vpa := newVPAObject()
-
-	return ctrl.NewControllerManagedBy(mgr).
-		// Primary resource.
-		For(vpa).
-		// Only care about VPAs we mark as managed.
-		WithEventFilter(predicates.ManagedVPALifecycle(r.Meta.ManagedLabel)).
-		Complete(r)
 }
