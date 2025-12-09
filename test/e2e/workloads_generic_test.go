@@ -146,7 +146,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 
 		testutils.ContainsLogs(
-			fmt.Sprintf("\"deleted obsolete VPA\",\"vpa\":%q", vpaName),
+			fmt.Sprintf("\"deleted obsolete VPA\",\"vpa\":%q,\"namespace\":%q,\"workload\":%q", vpaName, ns, dep.Name),
 			4*time.Second,
 			1*time.Second)
 	})
@@ -257,7 +257,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 
 		testutils.ContainsLogs(
-			"\"profile not found\",\"profile\":\"unknown\"",
+			fmt.Sprintf("\"profile not found; skipping VPA reconciliation\",\"namespace\":%q,\"workload\":%q,\"profile\":\"unknown\"", ns, dep.Name),
 			4*time.Second,
 			1*time.Second)
 	})

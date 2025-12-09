@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -205,6 +206,46 @@ func CreateVPA(
 			},
 		})
 	}
+
+	Expect(K8sClient.Create(ctx, vpa)).To(Succeed())
+	return vpa
+}
+
+// CreateManagedVPAWithOwnerRef creates a managed VPA with a specific controller ownerRef.
+func CreateManagedVPAWithOwnerRef(
+	ctx context.Context,
+	namespace, name, managedLabel string,
+	ownerGVK schema.GroupVersionKind,
+	ownerName string,
+	ownerUID types.UID,
+	spec map[string]any,
+) *unstructured.Unstructured {
+	vpa := &unstructured.Unstructured{
+		Object: map[string]any{},
+	}
+	vpa.SetGroupVersionKind(vpaGVK)
+	vpa.SetNamespace(namespace)
+	vpa.SetName(name)
+
+	labels := map[string]string{}
+	if managedLabel != "" {
+		labels[managedLabel] = "true"
+	}
+	vpa.SetLabels(labels)
+	vpa.Object["spec"] = spec
+
+	controller := true
+	blockOwnerDeletion := true
+	vpa.SetOwnerReferences([]metav1.OwnerReference{
+		{
+			APIVersion:         ownerGVK.GroupVersion().String(),
+			Kind:               ownerGVK.Kind,
+			Name:               ownerName,
+			UID:                ownerUID,
+			Controller:         &controller,
+			BlockOwnerDeletion: &blockOwnerDeletion,
+		},
+	})
 
 	Expect(K8sClient.Create(ctx, vpa)).To(Succeed())
 	return vpa

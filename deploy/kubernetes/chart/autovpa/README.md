@@ -35,7 +35,6 @@ This document provides an overview of the configurable values for the autovpa He
 | `profile.annotation`   | Workload annotation used to select a profile. | `autovpa.containeroo.ch/profile` |
 | `profile.managedLabel` | Label applied to managed VPAs.                | `autovpa.containeroo.ch/managed` |
 | `profile.nameTemplate` | Template for VPA names.                       | `{{ .WorkloadName }}-vpa`        |
-| `profile.argoManaged`  | Copy Argo tracking annotation to VPAs.        | `false`                          |
 
 ---
 

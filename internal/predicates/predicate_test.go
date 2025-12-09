@@ -25,14 +25,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
-func TestPredicatesAnnotationExists(t *testing.T) {
+func TestProfileAnnotationLifecycle(t *testing.T) {
 	t.Parallel()
 
 	objWith := &unstructured.Unstructured{}
 	objWith.SetAnnotations(map[string]string{"a": "b"})
 	objWithout := &unstructured.Unstructured{}
 
-	pred := AnnotationLifecycle("a")
+	pred := ProfileAnnotationLifecycle("a")
 
 	t.Run("Create event allowed when annotation exists", func(t *testing.T) {
 		t.Parallel()
@@ -62,6 +62,46 @@ func TestPredicatesAnnotationExists(t *testing.T) {
 		t.Parallel()
 		e := event.UpdateEvent{ObjectNew: objWithout, ObjectOld: objWith}
 		assert.True(t, pred.Update(e))
+	})
+
+	t.Run("Generic event ignored", func(t *testing.T) {
+		t.Parallel()
+		e := event.GenericEvent{Object: objWith}
+		assert.False(t, pred.Generic(e))
+	})
+}
+
+func TestManagedVPALifecycle(t *testing.T) {
+	t.Parallel()
+
+	objWith := &unstructured.Unstructured{}
+	objWith.SetLabels(map[string]string{"m": "true"})
+	objWithout := &unstructured.Unstructured{}
+
+	pred := ManagedVPALifecycle("m")
+
+	t.Run("Create event allowed when label exists", func(t *testing.T) {
+		t.Parallel()
+		e := event.CreateEvent{Object: objWith}
+		assert.True(t, pred.Create(e))
+	})
+
+	t.Run("Create event denied when label missing", func(t *testing.T) {
+		t.Parallel()
+		e := event.CreateEvent{Object: objWithout}
+		assert.False(t, pred.Create(e))
+	})
+
+	t.Run("Update event allowed when label present", func(t *testing.T) {
+		t.Parallel()
+		e := event.UpdateEvent{ObjectNew: objWith}
+		assert.True(t, pred.Update(e))
+	})
+
+	t.Run("Delete event allowed when label exists", func(t *testing.T) {
+		t.Parallel()
+		e := event.DeleteEvent{Object: objWith}
+		assert.True(t, pred.Delete(e))
 	})
 
 	t.Run("Generic event ignored", func(t *testing.T) {

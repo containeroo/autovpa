@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/containeroo/autovpa/internal/config"
-	"github.com/containeroo/autovpa/internal/flag"
 	"github.com/containeroo/autovpa/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,32 +53,6 @@ func TestControllerVpaNeedsUpdate(t *testing.T) {
 
 		b := a.DeepCopy()
 		assert.False(t, vpaNeedsUpdate(a, b))
-	})
-}
-
-func TestControllerWithArgoTrackingAnnotation(t *testing.T) {
-	t.Parallel()
-
-	t.Run("Returns original annotations when disabled", func(t *testing.T) {
-		t.Parallel()
-		ann := map[string]string{"argocd.argoproj.io/tracking-id": "demo"}
-		out := withArgoTrackingAnnotation(false, flag.ArgoTrackingAnnotation, ann)
-		assert.Empty(t, out)
-	})
-
-	t.Run("Ignores when workload lacks annotation", func(t *testing.T) {
-		t.Parallel()
-		ann := map[string]string{"foo": "bar"}
-		out := withArgoTrackingAnnotation(true, flag.ArgoTrackingAnnotation, ann)
-		assert.Empty(t, out)
-	})
-
-	t.Run("Copies tracking annotation when present", func(t *testing.T) {
-		t.Parallel()
-		ann := map[string]string{"argocd.argoproj.io/tracking-id": "demo"}
-		out := withArgoTrackingAnnotation(true, flag.ArgoTrackingAnnotation, ann)
-		assert.Equal(t, "demo", out["argocd.argoproj.io/tracking-id"])
-		assert.Len(t, out, 1)
 	})
 }
 

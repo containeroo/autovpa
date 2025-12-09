@@ -26,31 +26,29 @@ import (
 )
 
 const (
-	profileAnnotation      string = "autovpa.containeroo.ch/profile"
-	managedLabel           string = "autovpa.containeroo.ch/managed"
-	ArgoTrackingAnnotation string = "argocd.argoproj.io/tracking-id"
-	DefaultNameTemplate    string = "{{ .WorkloadName }}-{{ .Profile }}-vpa"
+	profileAnnotation   string = "autovpa.containeroo.ch/profile"
+	managedLabel        string = "autovpa.containeroo.ch/managed"
+	DefaultNameTemplate string = "{{ .WorkloadName }}-{{ .Profile }}-vpa"
 )
 
 // Options holds all configuration options for the application.
 type Options struct {
-	WatchNamespaces        []string // Namespaces to watch
-	MetricsAddr            string   // Address for the metrics server
-	LeaderElection         bool     // Enable leader election
-	ProbeAddr              string   // Address for health and readiness probes
-	SecureMetrics          bool     // Serve metrics over HTTPS
-	EnableHTTP2            bool     // Enable HTTP/2 for servers
-	EnableMetrics          bool     // Enable or disable metrics
-	LogEncoder             string   // Log format: "json" or "console"
-	LogStacktraceLevel     string   // Stacktrace log level
-	LogDev                 bool     // Enable development logging mode
-	ProfileAnnotation      string   // Annotation key workloads must set to request a profile.
-	ManagedLabel           string   // Annotation key to mark VPAs as managed by the operator.
-	ArgoManaged            bool     // Propagate the Argo tracking annotation to managed VPAs.
-	ArgoTrackingAnnotation string   // Annotation key to propagate when ArgoManaged is enabled.
-	DefaultNameTemplate    string   // Template used to render managed VPA names; can be overridden per profile.
-	ConfigPath             string   // Path to the Config containing VPA profiles.
-	CRDCheck               bool     // Enable the check for the VPA CRD.
+	WatchNamespaces     []string // Namespaces to watch
+	MetricsAddr         string   // Address for the metrics server
+	LeaderElection      bool     // Enable leader election
+	ProbeAddr           string   // Address for health and readiness probes
+	SecureMetrics       bool     // Serve metrics over HTTPS
+	EnableHTTP2         bool     // Enable HTTP/2 for servers
+	EnableMetrics       bool     // Enable or disable metrics
+	LogEncoder          string   // Log format: "json" or "console"
+	LogStacktraceLevel  string   // Stacktrace log level
+	LogDev              bool     // Enable development logging mode
+	ProfileAnnotation   string   // Annotation key workloads must set to request a profile.
+	ManagedLabel        string   // Annotation key to mark VPAs as managed by the operator.
+	DefaultNameTemplate string   // Template used to render managed VPA names; can be overridden per profile.
+	ConfigPath          string   // Path to the Config containing VPA profiles.
+	CRDCheck            bool     // Enable the check for the VPA CRD.
+	SkipManagerStart    bool     // Skip starting the manager (used by tests).
 
 	fs *tinyflags.FlagSet // parsed flagset (for changed-state queries)
 }
@@ -84,10 +82,6 @@ func ParseArgs(args []string, version string) (Options, error) {
 		Value()
 	tf.StringVar(&options.ManagedLabel, "managed-label", managedLabel, "Label key to mark VPAs as managed by the operator").
 		Placeholder("LABEL").
-		Value()
-	tf.BoolVar(&options.ArgoManaged, "argo-managed", false, fmt.Sprintf("Add the annotation %q to the managed VPAs", ArgoTrackingAnnotation)).
-		Strict().
-		HideAllowed().
 		Value()
 	tf.StringVar(&options.DefaultNameTemplate, "vpa-name-template", DefaultNameTemplate, "Template used to render managed VPA names; override per profile with nameTemplate *\n").
 		Placeholder("TEMPLATE-STRING").
@@ -123,6 +117,9 @@ func ParseArgs(args []string, version string) (Options, error) {
 		Strict().
 		HideAllowed().
 		Value()
+	tf.BoolVar(&options.SkipManagerStart, "skip-manager-start", false, "Skip starting the manager (tests only)").
+		HideAllowed().
+		Value()
 
 	// Logging
 	tf.StringVar(&options.LogEncoder, "log-encoder", "json", "Log format (json, console)").
@@ -141,7 +138,6 @@ func ParseArgs(args []string, version string) (Options, error) {
 
 	options.MetricsAddr = (*metricsBindAddress).String()
 	options.ProbeAddr = (*healthProbeaddress).String()
-	options.ArgoTrackingAnnotation = ArgoTrackingAnnotation
 	options.fs = tf // store the parsed flagset for changed-state queries
 
 	return options, nil
@@ -185,9 +181,6 @@ func (o Options) ChangedFlags() []string {
 	}
 	if o.WasSet("managed-label") {
 		add("managed-label", o.ManagedLabel)
-	}
-	if o.WasSet("argo-managed") {
-		add("argo-managed", fmt.Sprintf("%v", o.ArgoManaged))
 	}
 	if o.WasSet("vpa-name-template") {
 		add("vpa-name-template", o.DefaultNameTemplate)

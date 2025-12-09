@@ -25,14 +25,23 @@ By default, `AutoVPA` watches all namespaces. To restrict it to specific namespa
 
 If running in namespaced mode, ensure the associated `Role` and `RoleBinding` are configured accordingly. You can use `deploy/manifests/role.template` and `deploy/manifests/rolebinding.template` as starting points for custom RBAC definitions.
 
-## How to Use AutoVPA
+## Using AutoVPA
 
-- Annotate workloads with `autovpa.containeroo.ch/profile: "<profile-name>"` or `default` to use the default profile.
-- The operator creates/updates a VPA per workload:
-  - VPA name comes from the template (default `{{ .WorkloadName }}-{{ .Profile }}-vpa`; overridable per profile).
-  - Labels are merged from the workload plus the managed label (`autovpa.containeroo.ch/managed=true` by default).
-  - Argo tracking annotation is copied when `--argo-managed` is enabled.
-- Profiles: YAML with `defaultProfile` and `profiles` map; `targetRef` is ignored if present.
+- Add the annotation `autovpa.containeroo.ch/profile: "<profile-name>"` to any Deployment, StatefulSet, or DaemonSet to enable VPA management.
+  Use `default` to apply the operator's default profile.
+
+- For each annotated workload, the operator automatically creates or updates a corresponding VPA:
+  - **Name** is rendered from the configured template
+    (default: `{{ .WorkloadName }}-{{ .Profile }}-vpa`, overridable globally or per profile).
+  - **Labels** on the VPA include:
+    - all labels from the workload,
+    - the managed label (default: `autovpa.containeroo.ch/managed=true`),
+    - the profile label (`autovpa.containeroo.ch/profile=<profile-name>`).
+
+- **Profiles** are defined in a YAML file with:
+  - a `defaultProfile` key, and
+  - a `profiles` map containing per-profile settings (name template override, resource policy, etc.).
+    Any `targetRef` fields included in profile specs are ignored - AutoVPA always sets these automatically for you.
 
 ## Profile file example (config.yaml)
 
@@ -98,6 +107,33 @@ It will be rendered with the following variables:
 - `.Kind`: the kind of the workload.
 - `.Profile`: the profile name.
 
+## Managed vs. Manual VPA Behavior
+
+AutoVPA treats VPAs with the managed label (by default `autovpa.containeroo.ch/managed=true`) as its own and will try to keep them in sync with the workload.
+
+### If someone removes the managed label from a VPA
+
+- As long as the workload **still has** the profile annotation
+  (`autovpa.containeroo.ch/profile: <profile-name>`), AutoVPA will:
+  - Reconcile the workload again, and
+  - Re-add the managed label (and profile label) on the VPA to match its desired state.
+
+- If the workload **no longer has** the profile annotation and the managed label is removed from the VPA:
+  - AutoVPA stops treating that VPA as managed and leaves it alone.
+  - It effectively becomes a **manual** VPA that you own.
+
+### If someone changes the profile label on a VPA
+
+- AutoVPA always derives the desired profile from the **workload annotation**, not from the VPA.
+- If you change or remove `autovpa.containeroo.ch/profile` on the VPA:
+  - The next reconcile will reset the VPA's profile label (and spec) back to whatever the workload annotation says.
+  - Any manual changes to the VPA spec that conflict with the profile will be overwritten.
+
+In short:
+
+- Edit the **workload** to change behavior permanently.
+- Manual edits on **managed VPAs** are treated as temporary and will usually be corrected by the operator.
+
 ## Workload example
 
 ```yaml
@@ -125,7 +161,6 @@ spec:
 | `--disable-crd-check`         | Disable the check for the VPA CRD.                                      | `false`                                  | `AUTO_VPA_DISABLE_CRD_CHECK`         |
 | `--profile-annotation`        | Workload annotation key to select a profile.                            | `autovpa.containeroo.ch/profile`         | `AUTO_VPA_PROFILE_ANNOTATION`        |
 | `--managed-label`             | Label applied to managed VPAs.                                          | `autovpa.containeroo.ch/managed`         | `AUTO_VPA_MANAGED_LABEL`             |
-| `--argo-managed`              | Copy `argocd.argoproj.io/tracking-id` from workloads to managed VPAs.   | `false`                                  | `AUTO_VPA_ARGO_MANAGED`              |
 | `--vpa-name-template`         | Template for VPA names; per-profile `nameTemplate` can override. \*     | `{{ .WorkloadName }}-{{ .Profile }}-vpa` | `AUTO_VPA_VPA_NAME_TEMPLATE`         |
 | `--watch-namespace`           | Namespaces to watch (repeatable/comma-separated). Watches all if unset. | (all)                                    | `AUTO_VPA_WATCH_NAMESPACE`           |
 | `--metrics-enabled`           | Enable/disable metrics endpoint.                                        | `true`                                   | `AUTO_VPA_METRICS_ENABLED`           |

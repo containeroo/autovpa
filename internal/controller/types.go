@@ -26,18 +26,16 @@ import (
 // MetaConfig holds annotation/label settings shared across reconcilers.
 // It controls how workloads opt into profiles and how managed VPAs are marked.
 type MetaConfig struct {
-	ProfileAnnotation      string // Workload annotation key used to pick a VPA profile.
-	ManagedLabel           string // Label key applied to VPAs managed by this operator.
-	ArgoManaged            bool   // Whether to propagate Argo tracking metadata to managed VPAs.
-	ArgoTrackingAnnotation string // Annotation key used to propagate Argo tracking metadata to managed VPAs.
+	ProfileKey   string // Workload annotation key used to pick a VPA profile.
+	ManagedLabel string // Label key applied to VPAs managed by this operator.
 }
 
 // ProfileConfig wraps profile data shared across reconcilers.
 // It supplies the available profiles, default profile, and default name template.
 type ProfileConfig struct {
-	Profiles       map[string]config.Profile // All available profiles keyed by name.
-	DefaultProfile string                    // Default profile name to use when annotation selects "default".
-	NameTemplate   string                    // Default VPA name template when a profile does not override.
+	NameTemplate string                    // Default VPA name template when a profile does not override.
+	Default      string                    // Default profile name to use when annotation selects "default".
+	Entries      map[string]config.Profile // All available profiles keyed by name.
 }
 
 var (

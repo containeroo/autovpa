@@ -82,17 +82,14 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 
 	// Metadata config
 	metaCfg := controller.MetaConfig{
-		ProfileAnnotation:      flags.ProfileAnnotation,
-		ManagedLabel:           flags.ManagedLabel,
-		ArgoManaged:            flags.ArgoManaged,
-		ArgoTrackingAnnotation: flags.ArgoTrackingAnnotation,
+		ProfileKey:   flags.ProfileAnnotation,
+		ManagedLabel: flags.ManagedLabel,
 	}
 
 	// Validate annotation/label uniqueness
 	meta := map[string]string{
-		"Managed":      flags.ManagedLabel,
-		"Profile":      flags.ProfileAnnotation,
-		"ArgoTracking": flags.ArgoTrackingAnnotation,
+		"Managed": flags.ManagedLabel,
+		"Profile": flags.ProfileAnnotation,
 	}
 	if err := utils.ValidateUniqueKeys(meta); err != nil {
 		return fmt.Errorf("keys must be unique: %w", err)
@@ -167,9 +164,9 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			KubeClient: mgr.GetClient(),
 			Recorder:   mgr.GetEventRecorderFor("deployment-controller"),
 			Profiles: controller.ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flags.DefaultNameTemplate,
+				Entries:      cfg.Profiles,
+				Default:      cfg.DefaultProfile,
+				NameTemplate: flags.DefaultNameTemplate,
 			},
 			Meta: metaCfg,
 		},
@@ -184,9 +181,9 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			KubeClient: mgr.GetClient(),
 			Recorder:   mgr.GetEventRecorderFor("statefulset-controller"),
 			Profiles: controller.ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flags.DefaultNameTemplate,
+				Entries:      cfg.Profiles,
+				Default:      cfg.DefaultProfile,
+				NameTemplate: flags.DefaultNameTemplate,
 			},
 			Meta: metaCfg,
 		},
@@ -201,14 +198,24 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			KubeClient: mgr.GetClient(),
 			Recorder:   mgr.GetEventRecorderFor("daemonset-controller"),
 			Profiles: controller.ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flags.DefaultNameTemplate,
+				Entries:      cfg.Profiles,
+				Default:      cfg.DefaultProfile,
+				NameTemplate: flags.DefaultNameTemplate,
 			},
 			Meta: metaCfg,
 		},
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create DaemonSet controller: %w", err)
+	}
+
+	// Setup VPA controller
+	if err := (&controller.VPAReconciler{
+		Logger:     &logger,
+		KubeClient: mgr.GetClient(),
+		Recorder:   mgr.GetEventRecorderFor("vpa-controller"),
+		Meta:       metaCfg,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create VPA controlle: %w", err)
 	}
 
 	// Register health and readiness checks

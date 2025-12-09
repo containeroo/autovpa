@@ -39,25 +39,6 @@ func vpaNeedsUpdate(a, b *unstructured.Unstructured) bool {
 		!ownerRefsEqual(a.GetOwnerReferences(), b.GetOwnerReferences())
 }
 
-// withArgoTrackingAnnotation copies the Argo tracking annotation when enabled and present.
-// When disabled or absent, it returns an empty map so no workload annotations leak to the VPA.
-func withArgoTrackingAnnotation(enabled bool, argoTrackingAnnotation string, annotations map[string]string) map[string]string {
-	if !enabled {
-		return map[string]string{}
-	}
-
-	// Extract the tracking ID from the annotations.
-	trackingID, ok := annotations[argoTrackingAnnotation]
-	if !ok || trackingID == "" {
-		return map[string]string{}
-	}
-
-	// Create a new map with only the tracking ID annotation to avoid leaking other metadata.
-	return map[string]string{
-		argoTrackingAnnotation: trackingID,
-	}
-}
-
 // RenderVPAName renders and validates the VPA name using the provided template and data.
 func RenderVPAName(tmpl string, data utils.NameTemplateData) (string, error) {
 	return utils.RenderNameTemplate(tmpl, data)

@@ -41,6 +41,8 @@ func TestRun(t *testing.T) {
 			"--leader-elect=false",
 			"--watch-namespace=test-autovpa",
 			"--metrics-enabled=false",
+			"--skip-manager-start=true",
+			"--health-probe-bind-address=:0",
 			"--config=" + cfg,
 		}
 		out := &bytes.Buffer{}
