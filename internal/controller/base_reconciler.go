@@ -42,7 +42,7 @@ import (
 type desiredVPAState struct {
 	Name    string            // VPA name rendered from the name template.
 	Profile string            // Selected profile for the workload.
-	Labels  map[string]string // Final merged labels (workload labels + managed/profile markers).
+	Labels  map[string]string // Final labels (managed/profile markers and any additional metadata).
 	Spec    map[string]any    // The VPA "spec" rendered from the selected profile.
 }
 
@@ -58,13 +58,29 @@ type BaseReconciler struct {
 
 const fieldManager = "autovpa"
 
+// Event types.
+const (
+	vpaEventProfileAnnotationMissing = "ProfileAnnotationMissing"
+	vpaEventProfileNotFound          = "ProfileNotFound"
+	vpaEventDeletedManagedVPA        = "DeletedManagedVPA"
+	vpaEventDeletedObsoleteVPA       = "DeletedObsoleteVPA"
+	vpaEventVPACreated               = "VPACreated"
+	vpaEventVPAUpdated               = "VPAUpdated"
+)
+
+// Metric labels.
+const (
+	vpaSkipReasonAnnotationMissing = "annotation_missing"
+	vpaSkipReasonProfileMissing    = "profile_missing"
+)
+
 // ReconcileWorkload executes the full VPA lifecycle state machine for a workload.
 //
 // Algorithm overview:
 //  1. Determine whether the workload opts into VPA management (profile annotation).
 //  2. If not opted-in → delete all managed VPAs for this workload.
 //  3. Resolve the profile to use.
-//  4. Render the desired VPA name, labels, annotations and spec.
+//  4. Render the desired VPA name, labels, and spec.
 //  5. Delete obsolete VPAs (e.g. profile/name-template change).
 //  6. Create the desired VPA if missing.
 //  7. If it exists, merge and apply changes via server-side apply.
@@ -77,33 +93,42 @@ func (b *BaseReconciler) ReconcileWorkload(
 	targetGVK schema.GroupVersionKind,
 ) (ctrl.Result, error) {
 	name, ns := obj.GetName(), obj.GetNamespace()
-	log := b.Logger.WithValues("namespace", ns, "workload", name)
+	log := b.Logger.WithValues(
+		"namespace", ns,
+		"workload", name,
+		"kind", targetGVK.Kind,
+	)
 
 	// Check profile annotation (opt-in).
-	annotations := obj.GetAnnotations()
-	profileName := annotations[b.Meta.ProfileKey]
-	if profileName == "" {
-		log.Info("profile missing; skipping VPA reconciliation",
+	profileName, hasProfile := obj.GetAnnotations()[b.Meta.ProfileKey]
+	if !hasProfile || profileName == "" {
+		log.Info("profile annotation missing; skipping VPA reconciliation",
 			"annotation", b.Meta.ProfileKey,
 		)
 
 		b.Recorder.Event(
 			obj,
 			corev1.EventTypeWarning,
-			"ProfileAnnotationMissing",
+			vpaEventProfileAnnotationMissing,
 			fmt.Sprintf("annotation %q missing; skipping VPA", b.Meta.ProfileKey),
 		)
 
-		metrics.VPASkipped.WithLabelValues(ns, name, targetGVK.Kind, "annotation_missing").Inc()
+		metrics.VPASkipped.WithLabelValues(
+			ns,
+			name,
+			targetGVK.Kind,
+			vpaSkipReasonAnnotationMissing,
+		).Inc()
 
 		// User opted out → delete all operator-managed VPAs for this workload.
 		if err := b.DeleteAllManagedVPAsForWorkload(ctx, obj, targetGVK.Kind); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, nil // Do not return an error to avoid requeuing the workload.
+		// Do not return an error to avoid requeuing the workload.
+		return ctrl.Result{}, nil
 	}
 
-	// Resolve profile (fall back to default if annotation is "default"/empty).
+	// Resolve profile (using the annotated profile; workloads without a profile are skipped).
 	selectedProfile := utils.DefaultIfZero(profileName, b.Profiles.Default)
 	profile, found := b.Profiles.Entries[selectedProfile]
 	if !found {
@@ -117,12 +142,18 @@ func (b *BaseReconciler) ReconcileWorkload(
 		b.Recorder.Eventf(
 			obj,
 			corev1.EventTypeWarning,
-			"ProfileNotFound",
+			vpaEventProfileNotFound,
 			"profile %q not found", selectedProfile,
 		)
 
-		metrics.VPASkipped.WithLabelValues(ns, name, targetGVK.Kind, "profile_missing").Inc()
-		return ctrl.Result{}, nil // Do not return an error to avoid requeuing the workload.
+		metrics.VPASkipped.WithLabelValues(
+			ns,
+			name,
+			targetGVK.Kind,
+			vpaSkipReasonProfileMissing,
+		).Inc()
+		// Do not return an error to avoid requeuing the workload.
+		return ctrl.Result{}, nil
 	}
 
 	// Build desired VPA state from the profile and workload.
@@ -156,11 +187,16 @@ func (b *BaseReconciler) ReconcileWorkload(
 		b.Recorder.Eventf(
 			obj,
 			corev1.EventTypeNormal,
-			"VPACreated",
+			vpaEventVPACreated,
 			"Created VPA %s with profile %s", desired.Name, selectedProfile,
 		)
 
-		metrics.VPACreated.WithLabelValues(ns, name, targetGVK.Kind, selectedProfile).Inc()
+		metrics.VPACreated.WithLabelValues(
+			ns,
+			name,
+			targetGVK.Kind,
+			selectedProfile,
+		).Inc()
 		return ctrl.Result{}, nil
 	}
 
@@ -187,17 +223,26 @@ func (b *BaseReconciler) ReconcileWorkload(
 	b.Recorder.Eventf(
 		obj,
 		corev1.EventTypeNormal,
-		"VPAUpdated",
+		vpaEventVPAUpdated,
 		"Updated VPA %s to profile %s", desired.Name, selectedProfile,
 	)
 
-	metrics.VPAUpdated.WithLabelValues(ns, name, targetGVK.Kind, selectedProfile).Inc()
+	metrics.VPAUpdated.WithLabelValues(
+		ns,
+		name,
+		targetGVK.Kind,
+		selectedProfile,
+	).Inc()
 	return ctrl.Result{}, nil
 }
 
 // DeleteObsoleteManagedVPAs deletes all managed VPAs owned by `owner` except
 // the one named keepName. This handles profile/name-template changes.
-func (b *BaseReconciler) DeleteObsoleteManagedVPAs(ctx context.Context, owner client.Object, keepName string) error {
+func (b *BaseReconciler) DeleteObsoleteManagedVPAs(
+	ctx context.Context,
+	owner client.Object,
+	keepName string,
+) error {
 	vpas, err := b.listManagedVPAs(ctx, owner.GetNamespace())
 	if err != nil {
 		return err
@@ -228,7 +273,7 @@ func (b *BaseReconciler) DeleteObsoleteManagedVPAs(ctx context.Context, owner cl
 		b.Recorder.Eventf(
 			owner,
 			corev1.EventTypeNormal,
-			"DeletedObsoleteVPA",
+			vpaEventDeletedObsoleteVPA,
 			"Deleted obsolete VPA %s", vpa.GetName(),
 		)
 	}
@@ -240,8 +285,12 @@ func (b *BaseReconciler) DeleteObsoleteManagedVPAs(ctx context.Context, owner cl
 // owned by the specified workload. This is used when a workload:
 //   - is deleted
 //   - removes its profile annotation
-//   - or otherwise opts out of VPA management
-func (b *BaseReconciler) DeleteAllManagedVPAsForWorkload(ctx context.Context, owner client.Object, workloadKind string) error {
+//   - or otherwise opts out of VPA management.
+func (b *BaseReconciler) DeleteAllManagedVPAsForWorkload(
+	ctx context.Context,
+	owner client.Object,
+	workloadKind string,
+) error {
 	vpas, err := b.listManagedVPAs(ctx, owner.GetNamespace())
 	if err != nil {
 		return err
@@ -266,7 +315,7 @@ func (b *BaseReconciler) DeleteAllManagedVPAsForWorkload(ctx context.Context, ow
 			b.Recorder.Eventf(
 				owner,
 				corev1.EventTypeNormal,
-				"DeletedManagedVPA",
+				vpaEventDeletedManagedVPA,
 				"Deleted managed VPA %s for workload %s", vpa.GetName(), owner.GetName(),
 			)
 		}
@@ -315,7 +364,10 @@ func (b *BaseReconciler) buildDesiredVPA(
 }
 
 // fetchExistingVPA returns the VPA for the key or nil if not found.
-func (b *BaseReconciler) fetchExistingVPA(ctx context.Context, key types.NamespacedName) (*unstructured.Unstructured, error) {
+func (b *BaseReconciler) fetchExistingVPA(
+	ctx context.Context,
+	key types.NamespacedName,
+) (*unstructured.Unstructured, error) {
 	obj := newVPAObject()
 	if err := b.KubeClient.Get(ctx, key, obj); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -346,7 +398,10 @@ func (b *BaseReconciler) mergeVPA(
 // applyVPA applies a VPA via server-side apply.
 // managedFields must be stripped before sending the object, otherwise the API
 // server rejects the request.
-func (b *BaseReconciler) applyVPA(ctx context.Context, vpa *unstructured.Unstructured) error {
+func (b *BaseReconciler) applyVPA(
+	ctx context.Context,
+	vpa *unstructured.Unstructured,
+) error {
 	// Avoid sending stale managedFields back to the API server on Apply.
 	vpa.SetManagedFields(nil)
 
@@ -379,13 +434,19 @@ func (b *BaseReconciler) createVPA(
 }
 
 // updateVPA updates the given VPA via server-side apply.
-func (b *BaseReconciler) updateVPA(ctx context.Context, updated *unstructured.Unstructured) error {
+func (b *BaseReconciler) updateVPA(
+	ctx context.Context,
+	updated *unstructured.Unstructured,
+) error {
 	return b.applyVPA(ctx, updated)
 }
 
 // listManagedVPAs returns all VPA resources in the namespace that carry the
 // operator's managed label. This is the basis for cleanup logic.
-func (b *BaseReconciler) listManagedVPAs(ctx context.Context, namespace string) ([]*unstructured.Unstructured, error) {
+func (b *BaseReconciler) listManagedVPAs(
+	ctx context.Context,
+	namespace string,
+) ([]*unstructured.Unstructured, error) {
 	list := &unstructured.UnstructuredList{}
 	list.SetGroupVersionKind(vpaListGVK)
 
