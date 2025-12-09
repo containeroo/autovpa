@@ -39,9 +39,7 @@ var (
 
 	profileAnnotation = "autovpa.containeroo.ch/profile"
 	managedLabel      = "autovpa.containeroo.ch/managed"
-	argoTracking      = "argocd.argoproj.io/tracking-id"
-
-	VPANameTemplate = "{{ .WorkloadName }}-{{ .Profile }}-vpa"
+	VPANameTemplate   = "{{ .WorkloadName }}-{{ .Profile }}-vpa"
 )
 
 var (

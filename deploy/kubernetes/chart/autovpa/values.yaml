@@ -19,7 +19,6 @@ profile:
   # annotation: autovpa.containeroo.ch/profile
   # managedLabel: autovpa.containeroo.ch/managed
   # nameTemplate: "{{ .WorkloadName }}-{{ .Profile }}-vpa"
-  # argoManaged: false
 
 resources:
   # We usually recommend not to specify default resources and to leave this as a conscious

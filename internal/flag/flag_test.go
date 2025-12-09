@@ -52,8 +52,6 @@ func TestParseArgs(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, profileAnnotation, opts.ProfileAnnotation)
 		assert.Equal(t, managedLabel, opts.ManagedLabel)
-		assert.False(t, opts.ArgoManaged)
-		assert.Equal(t, ArgoTrackingAnnotation, opts.ArgoTrackingAnnotation)
 		assert.Equal(t, DefaultNameTemplate, opts.DefaultNameTemplate)
 		assert.Equal(t, "config.yaml", opts.ConfigPath)
 		assert.Equal(t, ":8443", opts.MetricsAddr)
@@ -74,7 +72,6 @@ func TestParseArgs(t *testing.T) {
 			"--profile-annotation", "custom.profile",
 			"--disable-crd-check", "true",
 			"--managed-label", "custom.managed",
-			"--argo-managed=true",
 			"--vpa-name-template", "{{ .Namespace }}-{{ .WorkloadName }}",
 			"--config", "/tmp/profiles.yaml",
 			"--metrics-bind-address", ":9090",
@@ -94,8 +91,6 @@ func TestParseArgs(t *testing.T) {
 		assert.Equal(t, "custom.profile", opts.ProfileAnnotation)
 		assert.Equal(t, "custom.managed", opts.ManagedLabel)
 		assert.Equal(t, false, opts.CRDCheck)
-		assert.True(t, opts.ArgoManaged)
-		assert.Equal(t, ArgoTrackingAnnotation, opts.ArgoTrackingAnnotation)
 		assert.Equal(t, "{{ .Namespace }}-{{ .WorkloadName }}", opts.DefaultNameTemplate)
 		assert.Equal(t, "/tmp/profiles.yaml", opts.ConfigPath)
 		assert.Equal(t, ":9090", opts.MetricsAddr)
@@ -271,7 +266,6 @@ func TestChangedFlags(t *testing.T) {
 			"--log-devel",
 			"--profile-annotation", "x/profile",
 			"--managed-label", "x/managed",
-			"--argo-managed=true",
 			"--vpa-name-template", "{{ .Profile }}-vpa",
 			"--config", "/tmp/cfg",
 			"--disable-crd-check",
@@ -292,7 +286,6 @@ func TestChangedFlags(t *testing.T) {
 			"log-devel=true",
 			"profile-annotation=x/profile",
 			"managed-label=x/managed",
-			"argo-managed=true",
 			"vpa-name-template={{ .Profile }}-vpa",
 			"config=/tmp/cfg",
 			"disable-crd-check=true",

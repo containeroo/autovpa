@@ -82,17 +82,14 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 
 	// Metadata config
 	metaCfg := controller.MetaConfig{
-		ProfileKey:             flags.ProfileAnnotation,
-		ManagedLabel:           flags.ManagedLabel,
-		ArgoManaged:            flags.ArgoManaged,
-		ArgoTrackingAnnotation: flags.ArgoTrackingAnnotation,
+		ProfileKey:   flags.ProfileAnnotation,
+		ManagedLabel: flags.ManagedLabel,
 	}
 
 	// Validate annotation/label uniqueness
 	meta := map[string]string{
-		"Managed":      flags.ManagedLabel,
-		"Profile":      flags.ProfileAnnotation,
-		"ArgoTracking": flags.ArgoTrackingAnnotation,
+		"Managed": flags.ManagedLabel,
+		"Profile": flags.ProfileAnnotation,
 	}
 	if err := utils.ValidateUniqueKeys(meta); err != nil {
 		return fmt.Errorf("keys must be unique: %w", err)

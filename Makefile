@@ -129,14 +129,6 @@ e2e: ginkgo ## Run all e2e tests sequentially (Ginkgo procs=1 required due to sh
 e2e-generic: ## Run only Mixed workload e2e tests
 	@$(MAKE) e2e FOCUS=Generic
 
-.PHONY: e2e-argo-disabled
-e2e-argo-disabled: ## Run only Argo tracking disabled e2e tests
-	@$(MAKE) e2e FOCUS="Argo tracking disabled"
-
-.PHONY: e2e-argo-enabled
-e2e-argo-enabled: ## Run only Argo tracking enabled e2e tests
-	@$(MAKE) e2e FOCUS="Argo tracking enabled"
-
 .PHONY: e2e-namespaced
 e2e-namespaced: ## Run only Namespaced mode e2e tests
 	@$(MAKE) e2e FOCUS="Namespaced mode"

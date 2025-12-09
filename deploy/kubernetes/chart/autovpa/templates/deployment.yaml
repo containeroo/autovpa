@@ -53,9 +53,6 @@ spec:
             - --profile-annotation={{ .Values.profile.annotation }}
             - --managed-label={{ .Values.profile.managedLabel }}
             - --vpa-name-template={{ .Values.profile.nameTemplate }}
-            {{- if .Values.profile.argoManaged }}
-            - --argo-managed
-            {{- end }}
             {{- if eq .Values.logging.format "console" }}
             - --log-devel
             {{- end }}

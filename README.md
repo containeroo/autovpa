@@ -38,8 +38,6 @@ If running in namespaced mode, ensure the associated `Role` and `RoleBinding` ar
     - the managed label (default: `autovpa.containeroo.ch/managed=true`),
     - the profile label (`autovpa.containeroo.ch/profile=<profile-name>`).
 
-  - **Argo tracking annotations** are copied from the workload when `--argo-managed` is enabled.
-
 - **Profiles** are defined in a YAML file with:
   - a `defaultProfile` key, and
   - a `profiles` map containing per-profile settings (name template override, resource policy, etc.).
@@ -163,7 +161,6 @@ spec:
 | `--disable-crd-check`         | Disable the check for the VPA CRD.                                      | `false`                                  | `AUTO_VPA_DISABLE_CRD_CHECK`         |
 | `--profile-annotation`        | Workload annotation key to select a profile.                            | `autovpa.containeroo.ch/profile`         | `AUTO_VPA_PROFILE_ANNOTATION`        |
 | `--managed-label`             | Label applied to managed VPAs.                                          | `autovpa.containeroo.ch/managed`         | `AUTO_VPA_MANAGED_LABEL`             |
-| `--argo-managed`              | Copy `argocd.argoproj.io/tracking-id` from workloads to managed VPAs.   | `false`                                  | `AUTO_VPA_ARGO_MANAGED`              |
 | `--vpa-name-template`         | Template for VPA names; per-profile `nameTemplate` can override. \*     | `{{ .WorkloadName }}-{{ .Profile }}-vpa` | `AUTO_VPA_VPA_NAME_TEMPLATE`         |
 | `--watch-namespace`           | Namespaces to watch (repeatable/comma-separated). Watches all if unset. | (all)                                    | `AUTO_VPA_WATCH_NAMESPACE`           |
 | `--metrics-enabled`           | Enable/disable metrics endpoint.                                        | `true`                                   | `AUTO_VPA_METRICS_ENABLED`           |

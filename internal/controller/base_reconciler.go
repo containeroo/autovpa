@@ -40,14 +40,14 @@ import (
 // desiredVPAState is the fully rendered desired state for a workload's VPA.
 // It contains all fields required to create or update the VPA.
 type desiredVPAState struct {
-	Name        string            // VPA name rendered from the name template.
-	Profile     string            // Selected profile for the workload.
-	Labels      map[string]string // Final merged labels (workload labels + managed/profile markers).
-	Annotations map[string]string // Final merged annotations (including Argo tracking if enabled).
-	Spec        map[string]any    // The VPA "spec" rendered from the selected profile.
+	Name    string            // VPA name rendered from the name template.
+	Profile string            // Selected profile for the workload.
+	Labels  map[string]string // Final merged labels (workload labels + managed/profile markers).
+	Spec    map[string]any    // The VPA "spec" rendered from the selected profile.
 }
 
 // BaseReconciler contains the shared logic for Deployment/StatefulSet/DaemonSet reconcilers.
+// It owns the profile configuration and implements the VPA lifecycle for a single workload.
 type BaseReconciler struct {
 	KubeClient client.Client
 	Logger     *logr.Logger
@@ -70,7 +70,7 @@ const fieldManager = "autovpa"
 //  7. If it exists, merge and apply changes via server-side apply.
 //
 // This function NEVER requeues on configuration errors (e.g. profile missing) to
-// avoid thrashing. It always returns nil error unless an API call fails.
+// avoid thrashing. It only returns a non-nil error when an API call fails.
 func (b *BaseReconciler) ReconcileWorkload(
 	ctx context.Context,
 	obj client.Object,
@@ -79,7 +79,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 	name, ns := obj.GetName(), obj.GetNamespace()
 	log := b.Logger.WithValues("namespace", ns, "workload", name)
 
-	// Check profile annotation
+	// Check profile annotation (opt-in).
 	annotations := obj.GetAnnotations()
 	profileName := annotations[b.Meta.ProfileKey]
 	if profileName == "" {
@@ -103,10 +103,13 @@ func (b *BaseReconciler) ReconcileWorkload(
 		return ctrl.Result{}, nil // Do not return an error to avoid requeuing the workload.
 	}
 
-	// Resolve profile
+	// Resolve profile (fall back to default if annotation is "default"/empty).
 	selectedProfile := utils.DefaultIfZero(profileName, b.Profiles.DefaultProfile)
 	profile, found := b.Profiles.Profiles[selectedProfile]
 	if !found {
+		// Invalid configuration: profile doesn't exist. This is surfaced as an
+		// Event and metric, but we do not requeue to avoid hot-looping until
+		// someone fixes the profile config.
 		log.Info("profile not found; skipping VPA reconciliation",
 			"profile", selectedProfile,
 		)
@@ -122,26 +125,26 @@ func (b *BaseReconciler) ReconcileWorkload(
 		return ctrl.Result{}, nil // Do not return an error to avoid requeuing the workload.
 	}
 
-	// Build desired VPA state
+	// Build desired VPA state from the profile and workload.
 	desired, err := b.buildDesiredVPA(obj, targetGVK, selectedProfile, profile)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Delete obsolete VPAs (old name, old profile, etc.)
+	// Delete obsolete VPAs (e.g. if name template or profile changed).
 	if err := b.DeleteObsoleteManagedVPAs(ctx, obj, desired.Name); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Fetch or create VPA
+	// Fetch or create the current VPA instance.
 	existing, err := b.fetchExistingVPA(ctx, types.NamespacedName{Name: desired.Name, Namespace: ns})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
+	// Create a new VPA when none exists yet.
 	if existing == nil {
-		// Create new VPA
-		if err := b.createVPA(ctx, obj, desired.Name, desired.Labels, desired.Annotations, desired.Spec); err != nil {
+		if err := b.createVPA(ctx, obj, desired.Name, desired.Labels, desired.Spec); err != nil {
 			return ctrl.Result{}, err
 		}
 
@@ -161,7 +164,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 		return ctrl.Result{}, nil
 	}
 
-	// Merge + update existing VPA
+	// Merge desired state into the existing VPA and apply any changes.
 	updated, err := b.mergeVPA(existing, desired, obj)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -192,7 +195,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 	return ctrl.Result{}, nil
 }
 
-// buildDesiredVPA resolves the target VPA name, labels, annotations, and spec
+// buildDesiredVPA resolves the target VPA name, labels, and spec
 // according to the selected profile and operator configuration.
 func (b *BaseReconciler) buildDesiredVPA(
 	obj client.Object,
@@ -200,6 +203,7 @@ func (b *BaseReconciler) buildDesiredVPA(
 	selectedProfile string,
 	profile config.Profile,
 ) (desiredVPAState, error) {
+	// Select the name template: profile override or global default.
 	templateStr := utils.DefaultIfZero(profile.NameTemplate, b.Profiles.NameTemplate)
 
 	vpaName, err := RenderVPAName(templateStr, utils.NameTemplateData{
@@ -217,26 +221,16 @@ func (b *BaseReconciler) buildDesiredVPA(
 		return desiredVPAState{}, err
 	}
 
-	// Ensure managed + profile labels are always present on the VPA.
-	labels := utils.MergeMaps(obj.GetLabels(),
-		map[string]string{
-			b.Meta.ManagedLabel: "true",
-			b.Meta.ProfileKey:   selectedProfile,
-		},
-	)
-
-	annotations := withArgoTrackingAnnotation(
-		b.Meta.ArgoManaged,
-		b.Meta.ArgoTrackingAnnotation,
-		obj.GetAnnotations(),
-	)
+	labels := map[string]string{
+		b.Meta.ManagedLabel: "true",
+		b.Meta.ProfileKey:   selectedProfile,
+	}
 
 	return desiredVPAState{
-		Name:        vpaName,
-		Profile:     selectedProfile,
-		Labels:      labels,
-		Annotations: annotations,
-		Spec:        spec,
+		Name:    vpaName,
+		Profile: selectedProfile,
+		Labels:  labels,
+		Spec:    spec,
 	}, nil
 }
 
@@ -253,6 +247,7 @@ func (b *BaseReconciler) fetchExistingVPA(ctx context.Context, key types.Namespa
 }
 
 // mergeVPA merges desired state into an existing VPA and sets the controller reference.
+// The returned object is a deep copy and safe to mutate without affecting the cache.
 func (b *BaseReconciler) mergeVPA(
 	existing *unstructured.Unstructured,
 	desired desiredVPAState,
@@ -260,7 +255,6 @@ func (b *BaseReconciler) mergeVPA(
 ) (*unstructured.Unstructured, error) {
 	updated := existing.DeepCopy() // never mutate cache objects
 	updated.SetLabels(utils.MergeMaps(updated.GetLabels(), desired.Labels))
-	updated.SetAnnotations(utils.MergeMaps(updated.GetAnnotations(), desired.Annotations))
 	updated.Object["spec"] = desired.Spec
 
 	if err := ctrl.SetControllerReference(owner, updated, b.KubeClient.Scheme()); err != nil {
@@ -287,14 +281,13 @@ func (b *BaseReconciler) createVPA(
 	ctx context.Context,
 	owner client.Object,
 	name string,
-	labels, annotations map[string]string,
+	labels map[string]string,
 	spec map[string]any,
 ) error {
 	vpa := newVPAObject()
 	vpa.SetName(name)
 	vpa.SetNamespace(owner.GetNamespace())
 	vpa.SetLabels(labels)
-	vpa.SetAnnotations(annotations)
 	vpa.Object["spec"] = spec
 
 	// Ensure the workload owns the VPA for garbage collection and intent tracking.
@@ -305,7 +298,7 @@ func (b *BaseReconciler) createVPA(
 	return b.applyVPA(ctx, vpa)
 }
 
-// updateVPA updates the given VPA.
+// updateVPA updates the given VPA via server-side apply.
 func (b *BaseReconciler) updateVPA(ctx context.Context, updated *unstructured.Unstructured) error {
 	return b.applyVPA(ctx, updated)
 }
@@ -344,13 +337,14 @@ func (b *BaseReconciler) DeleteObsoleteManagedVPAs(ctx context.Context, owner cl
 		if vpa.GetName() == keepName {
 			continue
 		}
-		// Check if the VPA is owned by the workload.
+		// Only consider VPAs actually owned by this workload.
 		if !metav1.IsControlledBy(vpa, owner) {
 			continue
 		}
 
-		// When here, we know that the VPA is owned by the workload and the VPA name has changed.
-		// Most likely the profile has changed, so we delete the obsolete VPA.
+		// When here, we know that the VPA is owned by the workload and the VPA name
+		// has changed. Most likely the profile or name template changed, so the VPA
+		// is obsolete and should be removed.
 		if err := b.KubeClient.Delete(ctx, vpa); err != nil {
 			return fmt.Errorf("delete obsolete VPA %s: %w", vpa.GetName(), err)
 		}

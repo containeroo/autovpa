@@ -260,58 +260,6 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("Creates VPA with Argo tracking annotation when enabled and present", func(t *testing.T) {
-		resetMetrics(t)
-		ctx := context.Background()
-		scheme := newScheme(t)
-		client := fake.NewClientBuilder().WithScheme(scheme).Build()
-		rec := record.NewFakeRecorder(10)
-		logger := logr.Discard()
-
-		cfg := &config.Config{
-			DefaultProfile: "p1",
-			Profiles: map[string]config.Profile{
-				"p1": {Spec: config.ProfileSpec{}},
-			},
-		}
-
-		reconciler := BaseReconciler{
-			KubeClient: client,
-			Logger:     &logger,
-			Recorder:   rec,
-			Meta: MetaConfig{
-				ProfileKey:             "vpa/profile",
-				ManagedLabel:           "vpa/managed",
-				ArgoManaged:            true,
-				ArgoTrackingAnnotation: flag.ArgoTrackingAnnotation,
-			},
-			Profiles: ProfileConfig{
-				Profiles:       cfg.Profiles,
-				DefaultProfile: cfg.DefaultProfile,
-				NameTemplate:   flag.DefaultNameTemplate,
-			},
-		}
-
-		dep := &appsv1.Deployment{}
-		dep.SetNamespace("ns1")
-		dep.SetName("demo")
-		dep.SetAnnotations(map[string]string{
-			"vpa/profile":                    "p1",
-			"argocd.argoproj.io/tracking-id": "myapp",
-		})
-
-		_, err := reconciler.ReconcileWorkload(ctx, dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))
-		require.NoError(t, err)
-
-		vpaName := renderDeploymentVPAName(t, "ns1", dep.GetName(), "p1")
-		vpa := newVPAObject()
-		err = client.Get(ctx, types.NamespacedName{Name: vpaName, Namespace: "ns1"}, vpa)
-		require.NoError(t, err)
-
-		annotations := vpa.GetAnnotations()
-		assert.Equal(t, "myapp", annotations["argocd.argoproj.io/tracking-id"])
-	})
-
 	t.Run("Updates VPA", func(t *testing.T) {
 		resetMetrics(t)
 		ctx := context.Background()
