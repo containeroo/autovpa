@@ -389,6 +389,321 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 	})
 }
 
+func TestBaseReconciler_buildDesiredVPA(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme(t)
+	logger := logr.Discard()
+	br := BaseReconciler{
+		KubeClient: fake.NewClientBuilder().WithScheme(scheme).Build(),
+		Logger:     &logger,
+		Meta: MetaConfig{
+			ProfileKey:   "vpa/profile",
+			ManagedLabel: "vpa/managed",
+		},
+		Profiles: ProfileConfig{
+			NameTemplate: flag.DefaultNameTemplate,
+		},
+	}
+
+	dep := &appsv1.Deployment{}
+	dep.SetNamespace("ns1")
+	dep.SetName("demo")
+
+	profile := config.Profile{
+		Spec: config.ProfileSpec{},
+	}
+
+	targetGVK := appsv1.SchemeGroupVersion.WithKind("Deployment")
+
+	desired, err := br.buildDesiredVPA(dep, targetGVK, "p1", profile)
+	require.NoError(t, err)
+
+	// Expected name via the same template helper used in production.
+	expectedName := renderDeploymentVPAName(t, "ns1", "demo", "p1")
+	assert.Equal(t, expectedName, desired.Name)
+	assert.Equal(t, "p1", desired.Profile)
+
+	// Managed + profile labels must be present.
+	assert.Equal(t, map[string]string{
+		"vpa/managed": "true",
+		"vpa/profile": "p1",
+	}, desired.Labels)
+
+	// Spec should contain a targetRef pointing to the workload.
+	spec := desired.Spec
+	targetRef, ok := spec["targetRef"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "demo", targetRef["name"])
+	assert.Equal(t, "Deployment", targetRef["kind"])
+}
+
+func TestBaseReconciler_fetchExistingVPA(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := newScheme(t)
+	logger := logr.Discard()
+
+	// Build a client with no VPAs.
+	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	br := BaseReconciler{
+		KubeClient: client,
+		Logger:     &logger,
+	}
+
+	// Not found → nil, nil.
+	obj, err := br.fetchExistingVPA(ctx, types.NamespacedName{Name: "missing", Namespace: "ns1"})
+	require.NoError(t, err)
+	assert.Nil(t, obj)
+
+	// Create a VPA and ensure it is returned.
+	existing := newVPAObject()
+	existing.SetNamespace("ns1")
+	existing.SetName("present")
+	existing.Object["spec"] = map[string]any{"foo": "bar"}
+
+	client = fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
+	br.KubeClient = client
+
+	obj, err = br.fetchExistingVPA(ctx, types.NamespacedName{Name: "present", Namespace: "ns1"})
+	require.NoError(t, err)
+	require.NotNil(t, obj)
+	assert.Equal(t, "present", obj.GetName())
+}
+
+func TestBaseReconciler_mergeVPA(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme(t)
+	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	logger := logr.Discard()
+
+	br := BaseReconciler{
+		KubeClient: client,
+		Logger:     &logger,
+	}
+
+	existing := newVPAObject()
+	existing.SetNamespace("ns1")
+	existing.SetName("demo-vpa")
+	existing.SetLabels(map[string]string{
+		"keep":     "yes",
+		"override": "old",
+	})
+	existing.Object["spec"] = map[string]any{
+		"targetRef": map[string]any{"name": "demo"},
+	}
+
+	desired := desiredVPAState{
+		Name:    "demo-vpa",
+		Profile: "p1",
+		Labels: map[string]string{
+			"override":    "new",
+			"vpa/managed": "true",
+			"vpa/profile": "p1",
+		},
+		Spec: map[string]any{
+			"targetRef": map[string]any{"name": "demo"},
+			"foo":       "bar",
+		},
+	}
+
+	owner := &appsv1.Deployment{}
+	owner.SetNamespace("ns1")
+	owner.SetName("demo")
+	owner.SetUID("uid1")
+
+	updated, err := br.mergeVPA(existing, desired, owner)
+	require.NoError(t, err)
+
+	// Existing must not be mutated.
+	existingSpec := existing.Object["spec"].(map[string]any)
+	assert.NotContains(t, existingSpec, "foo")
+
+	// Labels must be merged, with desired overriding existing keys.
+	gotLabels := updated.GetLabels()
+	assert.Equal(t, "yes", gotLabels["keep"])
+	assert.Equal(t, "new", gotLabels["override"])
+	assert.Equal(t, "true", gotLabels["vpa/managed"])
+	assert.Equal(t, "p1", gotLabels["vpa/profile"])
+
+	// Spec must match desired.
+	gotSpec := updated.Object["spec"].(map[string]any)
+	assert.Equal(t, "bar", gotSpec["foo"])
+
+	// Owner reference must be set with controller=true.
+	owners := updated.GetOwnerReferences()
+	require.Len(t, owners, 1)
+	assert.Equal(t, "demo", owners[0].Name)
+	require.NotNil(t, owners[0].Controller)
+	assert.True(t, *owners[0].Controller)
+}
+
+func TestBaseReconciler_applyVPA(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := newScheme(t)
+	logger := logr.Discard()
+
+	// Seed cluster with an existing VPA.
+	existing := newVPAObject()
+	existing.SetNamespace("ns1")
+	existing.SetName("demo-vpa")
+	existing.Object["spec"] = map[string]any{"field": "old"}
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
+
+	br := BaseReconciler{
+		KubeClient: client,
+		Logger:     &logger,
+	}
+
+	// Prepare an updated object with managedFields set to ensure they are cleared.
+	toApply := existing.DeepCopy()
+	toApply.Object["spec"] = map[string]any{"field": "new"}
+	toApply.SetManagedFields([]metav1.ManagedFieldsEntry{
+		{Manager: "test"},
+	})
+
+	err := br.applyVPA(ctx, toApply)
+	require.NoError(t, err)
+
+	// Ensure managedFields were cleared before/after the call.
+	assert.Len(t, toApply.GetManagedFields(), 0)
+
+	// Spec in the cluster should be updated.
+	got := newVPAObject()
+	err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, got)
+	require.NoError(t, err)
+
+	spec := got.Object["spec"].(map[string]any)
+	assert.Equal(t, "new", spec["field"])
+}
+
+func TestBaseReconciler_createVPA(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := newScheme(t)
+	logger := logr.Discard()
+
+	client := fake.NewClientBuilder().WithScheme(scheme).Build()
+	br := BaseReconciler{
+		KubeClient: client,
+		Logger:     &logger,
+	}
+
+	owner := &appsv1.Deployment{}
+	owner.SetNamespace("ns1")
+	owner.SetName("demo")
+	owner.SetUID("uid1")
+
+	err := br.createVPA(
+		ctx,
+		owner,
+		"demo-vpa",
+		map[string]string{"vpa/managed": "true"},
+		map[string]any{"foo": "bar"},
+	)
+	require.NoError(t, err)
+
+	// VPA should exist with expected fields and owner reference.
+	got := newVPAObject()
+	err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, got)
+	require.NoError(t, err)
+
+	assert.Equal(t, "demo-vpa", got.GetName())
+	assert.Equal(t, "true", got.GetLabels()["vpa/managed"])
+
+	spec := got.Object["spec"].(map[string]any)
+	assert.Equal(t, "bar", spec["foo"])
+
+	owners := got.GetOwnerReferences()
+	require.Len(t, owners, 1)
+	assert.Equal(t, "demo", owners[0].Name)
+}
+
+func TestBaseReconciler_updateVPA(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := newScheme(t)
+	logger := logr.Discard()
+
+	// Existing VPA in cluster.
+	existing := newVPAObject()
+	existing.SetNamespace("ns1")
+	existing.SetName("demo-vpa")
+	existing.Object["spec"] = map[string]any{"field": "old"}
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
+
+	br := BaseReconciler{
+		KubeClient: client,
+		Logger:     &logger,
+	}
+
+	// Updated object to send.
+	updated := existing.DeepCopy()
+	updated.Object["spec"] = map[string]any{"field": "new"}
+
+	err := br.updateVPA(ctx, updated)
+	require.NoError(t, err)
+
+	got := newVPAObject()
+	err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, got)
+	require.NoError(t, err)
+
+	spec := got.Object["spec"].(map[string]any)
+	assert.Equal(t, "new", spec["field"])
+}
+
+func TestBaseReconciler_listManagedVPAs(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := newScheme(t)
+	logger := logr.Discard()
+
+	// Two managed VPAs in ns1, one unmanaged, one managed in another namespace.
+	vpa1 := newVPAObject()
+	vpa1.SetNamespace("ns1")
+	vpa1.SetName("vpa-managed-1")
+	vpa1.SetLabels(map[string]string{"vpa/managed": "true"})
+
+	vpa2 := newVPAObject()
+	vpa2.SetNamespace("ns1")
+	vpa2.SetName("vpa-unmanaged")
+	vpa2.SetLabels(map[string]string{"other": "label"})
+
+	vpa3 := newVPAObject()
+	vpa3.SetNamespace("ns2")
+	vpa3.SetName("vpa-managed-2")
+	vpa3.SetLabels(map[string]string{"vpa/managed": "true"})
+
+	client := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(vpa1, vpa2, vpa3).
+		Build()
+
+	br := BaseReconciler{
+		KubeClient: client,
+		Logger:     &logger,
+		Meta: MetaConfig{
+			ManagedLabel: "vpa/managed",
+		},
+	}
+
+	list, err := br.listManagedVPAs(ctx, "ns1")
+	require.NoError(t, err)
+
+	// Only vpa1 should be returned for ns1.
+	require.Len(t, list, 1)
+	assert.Equal(t, "vpa-managed-1", list[0].GetName())
+}
+
 func newScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
