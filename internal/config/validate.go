@@ -33,13 +33,16 @@ func (c *Config) Validate(defaultTemplate string) error {
 		return errors.New("defaultProfile must be set")
 	}
 
-	// Validate the default name template.
-	if _, err := utils.RenderNameTemplate(defaultTemplate, utils.NameTemplateData{
+	// Example data used for validating name templates.
+	sampleNameData := utils.NameTemplateData{
 		WorkloadName: "workload",
 		Namespace:    "namespace",
 		Kind:         "Deployment",
 		Profile:      "default",
-	}); err != nil {
+	}
+
+	// Validate the default name template.
+	if _, err := utils.RenderNameTemplate(defaultTemplate, sampleNameData); err != nil {
 		return fmt.Errorf("default name template invalid: %w", err)
 	}
 
@@ -48,28 +51,23 @@ func (c *Config) Validate(defaultTemplate string) error {
 	for name, spec := range c.Profiles {
 		copied := copyProfileSpec(spec.Spec)
 
-		// Check if the profile is a valid vericalpodautoscaler.spec.
+		// Check if the profile is a valid VerticalPodAutoscaler spec.
 		if err := validateProfileSpec(&copied); err != nil {
 			return fmt.Errorf("profile %q invalid: %w", name, err)
 		}
 
-		// Use the default name template if not set.
-		templateToValidate := utils.DefaultIfZero(spec.NameTemplate, defaultTemplate)
+		// Choose effective template: per-profile override or default.
+		effectiveTemplate := utils.DefaultIfZero(spec.NameTemplate, defaultTemplate)
 
-		// Validate custom name templates.
-		if _, err := utils.RenderNameTemplate(templateToValidate, utils.NameTemplateData{
-			WorkloadName: "workload",
-			Namespace:    "namespace",
-			Kind:         "Deployment",
-			Profile:      "default",
-		}); err != nil {
+		// Validate the effective name template with sample data.
+		if _, err := utils.RenderNameTemplate(effectiveTemplate, sampleNameData); err != nil {
 			return fmt.Errorf("profile %q name template invalid: %w", name, err)
 		}
 
-		// Update the parsed map
+		// Store the normalized profile.
 		parsed[name] = Profile{
-			NameTemplate: spec.NameTemplate,
-			Spec:         copied,
+			NameTemplate: spec.NameTemplate, // keep override as-is; default is applied at use-site
+			Spec:         copied,            // copied & targetRef-stripped
 		}
 	}
 
@@ -79,6 +77,5 @@ func (c *Config) Validate(defaultTemplate string) error {
 	}
 
 	c.Profiles = parsed
-
 	return nil
 }

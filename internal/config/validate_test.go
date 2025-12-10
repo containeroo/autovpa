@@ -121,7 +121,7 @@ func TestConfigValidate(t *testing.T) {
 		}
 		err := cfg.Validate("{{ .WorkloadName }}")
 		require.Error(t, err)
-		assert.EqualError(t, err, "profile \"p1\" invalid: targetRef must not be set in profile")
+		assert.EqualError(t, err, "profile \"p1\" invalid: invalid profile: .targetRef must not be set")
 	})
 }
 

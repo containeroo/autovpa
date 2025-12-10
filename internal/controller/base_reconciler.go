@@ -100,7 +100,8 @@ func (b *BaseReconciler) ReconcileWorkload(
 	)
 
 	// Check profile annotation (opt-in).
-	profileName, hasProfile := obj.GetAnnotations()[b.Meta.ProfileKey]
+	annotations := obj.GetAnnotations()
+	profileName, hasProfile := annotations[b.Meta.ProfileKey]
 	if !hasProfile || profileName == "" {
 		log.Info("profile annotation missing; skipping VPA reconciliation",
 			"annotation", b.Meta.ProfileKey,

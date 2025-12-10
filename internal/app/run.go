@@ -69,7 +69,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 	setupLog.Info("initializing autovpa", "version", version)
 
 	// Load profiles
-	cfg, err := config.Load(flags.ConfigPath)
+	cfg, err := config.LoadFile(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to load profiles: %w", err)
 	}
@@ -78,6 +78,13 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 	}
 	if overrides := flags.ChangedFlags(); len(overrides) > 0 {
 		setupLog.Info("flag overrides", "values", strings.Join(overrides, ", "))
+	}
+
+	// Profiles config
+	profilesCfg := controller.ProfileConfig{
+		Entries:      cfg.Profiles,
+		Default:      cfg.DefaultProfile,
+		NameTemplate: flags.DefaultNameTemplate,
 	}
 
 	// Metadata config
@@ -92,9 +99,9 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		"Profile": flags.ProfileAnnotation,
 	}
 	if err := utils.ValidateUniqueKeys(meta); err != nil {
-		return fmt.Errorf("keys must be unique: %w", err)
+		return fmt.Errorf("annotation/label keys must be unique: %w", err)
 	}
-	setupLog.Info("configured annotations", "values", utils.FormatKeys(meta))
+	setupLog.Info("configured annotation/label keys", "values", utils.FormatKeys(meta))
 
 	// Configure HTTP/2 settings
 	tlsOpts := []func(*tls.Config){}
@@ -163,12 +170,8 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Logger:     &logger,
 			KubeClient: mgr.GetClient(),
 			Recorder:   mgr.GetEventRecorderFor("deployment-controller"),
-			Profiles: controller.ProfileConfig{
-				Entries:      cfg.Profiles,
-				Default:      cfg.DefaultProfile,
-				NameTemplate: flags.DefaultNameTemplate,
-			},
-			Meta: metaCfg,
+			Profiles:   profilesCfg,
+			Meta:       metaCfg,
 		},
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create Deployment controller: %w", err)
@@ -180,12 +183,8 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Logger:     &logger,
 			KubeClient: mgr.GetClient(),
 			Recorder:   mgr.GetEventRecorderFor("statefulset-controller"),
-			Profiles: controller.ProfileConfig{
-				Entries:      cfg.Profiles,
-				Default:      cfg.DefaultProfile,
-				NameTemplate: flags.DefaultNameTemplate,
-			},
-			Meta: metaCfg,
+			Profiles:   profilesCfg,
+			Meta:       metaCfg,
 		},
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create StatefulSet controller: %w", err)
@@ -197,12 +196,8 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Logger:     &logger,
 			KubeClient: mgr.GetClient(),
 			Recorder:   mgr.GetEventRecorderFor("daemonset-controller"),
-			Profiles: controller.ProfileConfig{
-				Entries:      cfg.Profiles,
-				Default:      cfg.DefaultProfile,
-				NameTemplate: flags.DefaultNameTemplate,
-			},
-			Meta: metaCfg,
+			Profiles:   profilesCfg,
+			Meta:       metaCfg,
 		},
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create DaemonSet controller: %w", err)
@@ -215,7 +210,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		Recorder:   mgr.GetEventRecorderFor("vpa-controller"),
 		Meta:       metaCfg,
 	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create VPA controlle: %w", err)
+		return fmt.Errorf("unable to create VPA controller: %w", err)
 	}
 
 	// Register health and readiness checks

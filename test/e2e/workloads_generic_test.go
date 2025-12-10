@@ -257,7 +257,12 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 
 		testutils.ContainsLogs(
-			fmt.Sprintf("\"profile not found; skipping VPA reconciliation\",\"namespace\":%q,\"workload\":%q,\"profile\":\"unknown\"", ns, dep.Name),
+			fmt.Sprintf(
+				"\"profile not found; skipping VPA reconciliation\",\"namespace\":%q,\"workload\":%q,\"kind\":%q,\"profile\":\"unknown\"",
+				ns,
+				dep.Name,
+				dep.GroupVersionKind().Kind,
+			),
 			4*time.Second,
 			1*time.Second)
 	})

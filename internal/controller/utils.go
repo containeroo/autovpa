@@ -32,8 +32,12 @@ import (
 	vpaautoscaling "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 )
 
-// vpaNeedsUpdate checks whether two VPA objects differ in managed fields.
+// vpaNeedsUpdate reports whether the relevant managed fields of the two VPAs differ.
 func vpaNeedsUpdate(a, b *unstructured.Unstructured) bool {
+	if a == nil || b == nil {
+		return a != b
+	}
+
 	return !apiequality.Semantic.DeepEqual(a.Object["spec"], b.Object["spec"]) ||
 		!maps.Equal(a.GetLabels(), b.GetLabels()) ||
 		!ownerRefsEqual(a.GetOwnerReferences(), b.GetOwnerReferences())
@@ -46,9 +50,7 @@ func RenderVPAName(tmpl string, data utils.NameTemplateData) (string, error) {
 
 // newVPAObject returns an empty VPA object with the correct GVK set.
 func newVPAObject() *unstructured.Unstructured {
-	obj := &unstructured.Unstructured{
-		Object: map[string]any{},
-	}
+	obj := &unstructured.Unstructured{Object: map[string]any{}}
 	obj.SetGroupVersionKind(vpaGVK)
 	return obj
 }

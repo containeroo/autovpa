@@ -24,19 +24,22 @@ import (
 
 // copyProfileSpec returns a deep copy of the provided VPA profile spec.
 func copyProfileSpec(spec ProfileSpec) ProfileSpec {
-	s := vpaautoscaling.VerticalPodAutoscalerSpec(spec)
-	out := s.DeepCopy()
-	return ProfileSpec(*out)
+	typed := vpaautoscaling.VerticalPodAutoscalerSpec(spec)
+	return ProfileSpec(*typed.DeepCopy())
 }
 
-// validateProfileSpec ensures targetRef is not set.
+// validateProfileSpec ensures that targetRef is unset in the profile.
 func validateProfileSpec(spec *ProfileSpec) error {
 	typed := vpaautoscaling.VerticalPodAutoscalerSpec(*spec)
+
 	if typed.TargetRef != nil {
-		return fmt.Errorf("targetRef must not be set in profile")
+		return fmt.Errorf("invalid profile: .targetRef must not be set")
 	}
+
 	// Clear targetRef explicitly to avoid accidental reuse.
 	typed.TargetRef = nil
+
 	*spec = ProfileSpec(typed)
+
 	return nil
 }

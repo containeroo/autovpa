@@ -29,27 +29,34 @@ type ProfileSpec vpaautoscaling.VerticalPodAutoscalerSpec
 
 // Profile wraps a VPA spec with optional metadata.
 type Profile struct {
-	NameTemplate string      `yaml:"nameTemplate,omitempty"` // Optional VPA name template override for this profile.
-	Spec         ProfileSpec `yaml:",inline"`                // Inline VPA spec fragment.
+	// NameTemplate optionally overrides the global VPA name template for this profile.
+	NameTemplate string `yaml:"nameTemplate,omitempty"`
+	// Spec is the inline VerticalPodAutoscaler spec fragment for this profile.
+	Spec ProfileSpec `yaml:",inline"`
 }
 
 // Config holds all profiles plus the default profile name.
 type Config struct {
-	DefaultProfile string             `yaml:"defaultProfile"` // Name of the profile to use when workloads request "default".
-	Profiles       map[string]Profile `yaml:"profiles"`       // All profiles keyed by name.
+	// DefaultProfile is the profile name used when workloads request "default".
+	DefaultProfile string `yaml:"defaultProfile"`
+	// Profiles contains all available profiles keyed by their name.
+	Profiles map[string]Profile `yaml:"profiles"`
 }
 
-// Load reads a profiles file from disk and returns the parsed config.
-func Load(filePath string) (*Config, error) {
+// LoadFile reads a profiles file from disk and returns the parsed config.
+func LoadFile(filePath string) (*Config, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("read profiles file %q: %w", filePath, err)
 	}
+	return parse(data)
+}
 
-	cfg := Config{}
+// parse unmarshals a profiles YAML document into a Config.
+func parse(data []byte) (*Config, error) {
+	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse profiles file %q: %w", filePath, err)
+		return nil, fmt.Errorf("parse profiles: %w", err)
 	}
-
 	return &cfg, nil
 }
