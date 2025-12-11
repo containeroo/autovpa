@@ -228,7 +228,10 @@ func (r *VPAReconciler) deleteManagedVPA(
 	ctx context.Context,
 	vpa client.Object,
 ) error {
-	if err := r.KubeClient.Delete(ctx, vpa); err != nil && !apierrors.IsNotFound(err) {
+	if err := r.KubeClient.Delete(ctx, vpa); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 	return nil

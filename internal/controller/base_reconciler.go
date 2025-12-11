@@ -262,6 +262,9 @@ func (b *BaseReconciler) DeleteObsoleteManagedVPAs(
 		// has changed. Most likely the profile or name template changed, so the VPA
 		// is obsolete and should be removed.
 		if err := b.KubeClient.Delete(ctx, vpa); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
 			return fmt.Errorf("delete obsolete VPA %s: %w", vpa.GetName(), err)
 		}
 
@@ -303,7 +306,10 @@ func (b *BaseReconciler) DeleteAllManagedVPAsForWorkload(
 				continue
 			}
 
-			if err := b.KubeClient.Delete(ctx, vpa); err != nil && !apierrors.IsNotFound(err) {
+			if err := b.KubeClient.Delete(ctx, vpa); err != nil {
+				if apierrors.IsNotFound(err) {
+					continue
+				}
 				return fmt.Errorf("delete VPA %s: %w", vpa.GetName(), err)
 			}
 
