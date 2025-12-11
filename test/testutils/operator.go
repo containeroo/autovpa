@@ -45,7 +45,7 @@ func StartOperatorWithFlags(flags []string) {
 	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	// redirect output so ic an be captured
+	// Redirect output so it can be captured.
 	output := io.MultiWriter(LogBuffer, GinkgoWriter)
 	cmd.Stdout = output
 	cmd.Stderr = output

@@ -44,7 +44,7 @@ type Options struct {
 	LogStacktraceLevel  string   // Stacktrace log level
 	LogDev              bool     // Enable development logging mode
 	ProfileAnnotation   string   // Annotation key workloads must set to request a profile.
-	ManagedLabel        string   // Annotation key to mark VPAs as managed by the operator.
+	ManagedLabel        string   // Label key to mark VPAs as managed by the operator.
 	DefaultNameTemplate string   // Template used to render managed VPA names; can be overridden per profile.
 	ConfigPath          string   // Path to the Config containing VPA profiles.
 	CRDCheck            bool     // Enable the check for the VPA CRD.

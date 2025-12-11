@@ -27,7 +27,7 @@ import (
 //
 // Semantics:
 //   - Create:  only if the annotation exists (workload opts in).
-//   - Update:  if the annotation was added or removed (opt-in/out transitions).
+//   - Update:  if the annotation was added/removed OR still present (opt-in/out transitions and opted-in updates).
 //   - Delete:  if the annotation existed (final cleanup for deleted workload).
 //   - Generic: disabled to avoid noisy resyncs.
 func ProfileAnnotationLifecycle(annotation string) predicate.Predicate {

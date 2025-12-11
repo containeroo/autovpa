@@ -18,7 +18,7 @@ package predicates
 
 import "sigs.k8s.io/controller-runtime/pkg/client"
 
-// hasAnnotation returns true if obj contains any of the specified annotations.
+// hasAnnotation returns true if obj contains the specified annotation key.
 func hasAnnotation(obj client.Object, annotation string) bool {
 	if obj == nil {
 		return false
