@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2" // nolint:staticcheck
 	. "github.com/onsi/gomega"    // nolint:staticcheck
 
+	vpaautoscaling "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -103,6 +104,15 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 		testutils.ExpectVPA(ctx, ds.GetNamespace(), vpaName, managedLabel)
 	})
 
+	It("Uses profile name template overrides", func(ctx SpecContext) {
+		name := testutils.GenerateUniqueName("dep")
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "auto"))
+
+		// The "auto" profile in the test config sets nameTemplate to "{{ .WorkloadName }}-vpa".
+		expectedName := dep.GetName() + "-vpa"
+		testutils.ExpectVPA(ctx, dep.GetNamespace(), expectedName, managedLabel)
+	})
+
 	It("Skips workloads without profile annotation", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
 		dep := testutils.CreateDeployment(ctx, ns, name)
@@ -136,12 +146,8 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
 
 		By("Waiting for the new VPA is created and the old one to be gone")
-		newVPAName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
-			WorkloadName: dep.GetName(),
-			Namespace:    dep.GetNamespace(),
-			Kind:         DeploymentGVK.Kind,
-			Profile:      "auto",
-		})
+		// Profile "auto" overrides the name template to "{{ .WorkloadName }}-vpa".
+		newVPAName := dep.GetName() + "-vpa"
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), newVPAName, managedLabel)
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 
@@ -149,6 +155,38 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			fmt.Sprintf("\"deleted obsolete VPA\",\"vpa\":%q,\"namespace\":%q,\"workload\":%q", vpaName, ns, dep.Name),
 			4*time.Second,
 			1*time.Second)
+	})
+
+	It("Matches VPA spec to profile fields", func(ctx SpecContext) {
+		name := testutils.GenerateUniqueName("dep")
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "auto"))
+
+		// auto profile uses nameTemplate "{{ .WorkloadName }}-vpa"
+		vpaName := dep.GetName() + "-vpa"
+		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
+
+		expected := map[string]any{
+			"updatePolicy": map[string]any{
+				"updateMode": string(vpaautoscaling.UpdateModeAuto),
+			},
+			"resourcePolicy": map[string]any{
+				"containerPolicies": []any{
+					map[string]any{
+						"containerName": "*",
+						"controlledResources": []any{
+							"cpu",
+							"memory",
+						},
+						"minAllowed": map[string]any{
+							"cpu":    "20m",
+							"memory": "64Mi",
+						},
+					},
+				},
+			},
+		}
+
+		testutils.ExpectVPASpec(ctx, dep.GetNamespace(), vpaName, expected)
 	})
 
 	It("Deployment restart does not trigger a VPA update", func(ctx SpecContext) {

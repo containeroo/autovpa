@@ -181,7 +181,7 @@ build: fmt vet ## Build manager binary.
 
 .PHONY: run
 run: fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go $(ARGS)
+	go run ./cmd/main.go --config ./deploy/kubernetes/config.yaml $(ARGS)
 
 .PHONY: kustomize
 kustomize: ## Render kustomize manifests and save as a single file.

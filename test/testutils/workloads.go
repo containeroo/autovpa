@@ -142,6 +142,21 @@ func ExpectVPA(ctx context.Context, namespace, name, managedLabel string) {
 	}).WithContext(ctx).Within(30 * time.Second).ProbeEvery(1 * time.Second).Should(Succeed())
 }
 
+// ExpectVPASpec asserts that the VPA spec contains the expected fields.
+func ExpectVPASpec(ctx context.Context, namespace, name string, expected map[string]any) {
+	Eventually(func(g Gomega) {
+		vpa, err := GetVPA(ctx, namespace, name)
+		g.Expect(err).ShouldNot(HaveOccurred())
+
+		spec, ok := vpa.Object["spec"].(map[string]any)
+		g.Expect(ok).To(BeTrue(), "VPA spec should be a map")
+
+		for key, val := range expected {
+			g.Expect(spec).To(HaveKeyWithValue(key, val))
+		}
+	}).WithContext(ctx).Within(30 * time.Second).ProbeEvery(1 * time.Second).Should(Succeed())
+}
+
 // GetVPA fetches a VPA as unstructured.
 func GetVPA(ctx context.Context, namespace, name string) (*unstructured.Unstructured, error) {
 	vpa := &unstructured.Unstructured{}

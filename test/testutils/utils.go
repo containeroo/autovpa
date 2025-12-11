@@ -68,13 +68,24 @@ func WriteProfiles(name string) string {
 defaultProfile: default
 profiles:
   default:
-    spec:
-      updatePolicy:
-        updateMode: "Off"
+    updatePolicy:
+      updateMode: Off
+    resourcePolicy:
+      containerPolicies:
+        - containerName: "*"
+          controlledResources: ["cpu", "memory"]
   auto:
-    spec:
-      updatePolicy:
-        updateMode: "Auto"
+    nameTemplate: "{{ .WorkloadName }}-vpa"
+    # optional per-profile VPA name override
+    updatePolicy:
+      updateMode: Auto
+    resourcePolicy:
+      containerPolicies:
+        - containerName: "*"
+          controlledResources: ["cpu", "memory"]
+          minAllowed:
+            cpu: 20m
+            memory: 64Mi
 `)
 	Expect(os.WriteFile(path, payload, 0o644)).To(Succeed())
 	return path
