@@ -127,6 +127,69 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 	})
 
+	It("Deletes VPA when workload removes the profile annotation (opt-out)", func(ctx SpecContext) {
+		name := testutils.GenerateUniqueName("dep")
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+
+		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
+			WorkloadName: dep.GetName(),
+			Namespace:    dep.GetNamespace(),
+			Kind:         DeploymentGVK.Kind,
+			Profile:      "default",
+		})
+		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
+
+		By("Removing the profile annotation to opt out")
+		patch := client.MergeFrom(dep.DeepCopy())
+		delete(dep.Annotations, profileAnnotation)
+		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
+
+		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
+	})
+
+	It("Leaves an unmanaged VPA alone after opt-out and managed-label removal", func(ctx SpecContext) {
+		name := testutils.GenerateUniqueName("dep")
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+
+		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
+			WorkloadName: dep.GetName(),
+			Namespace:    dep.GetNamespace(),
+			Kind:         DeploymentGVK.Kind,
+			Profile:      "default",
+		})
+		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
+
+		By("Opting out by removing the profile annotation")
+		patch := client.MergeFrom(dep.DeepCopy())
+		delete(dep.Annotations, profileAnnotation)
+		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
+		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
+
+		By("Recreating the VPA without the managed label; operator should ignore it")
+		spec := map[string]any{
+			"targetRef": map[string]any{
+				"apiVersion": DeploymentGVK.GroupVersion().String(),
+				"kind":       DeploymentGVK.Kind,
+				"name":       dep.GetName(),
+			},
+		}
+		testutils.CreateVPA(
+			ctx,
+			dep.GetNamespace(),
+			vpaName,
+			spec,
+			map[string]string{}, // no managed label
+			map[string]string{},
+			dep,
+		)
+
+		Consistently(func(g Gomega) {
+			vpa, err := testutils.GetVPA(ctx, dep.GetNamespace(), vpaName)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(vpa.GetLabels()).ToNot(HaveKey(managedLabel))
+		}).WithContext(ctx).Within(6 * time.Second).ProbeEvery(1 * time.Second).Should(Succeed())
+	})
+
 	It("Replaces VPA when name template changes", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))

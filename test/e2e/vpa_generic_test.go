@@ -135,4 +135,71 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 			g.Expect(vpa.GetLabels()).To(HaveKeyWithValue(managedLabel, "true"))
 		}).WithContext(ctx).Within(30 * time.Second).ProbeEvery(1 * time.Second).Should(Succeed())
 	})
+
+	It("Restores the profile label after manual tampering when the workload has a profile", func(ctx SpecContext) {
+		name := testutils.GenerateUniqueName("dep")
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+
+		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
+			WorkloadName: dep.GetName(),
+			Namespace:    dep.GetNamespace(),
+			Kind:         DeploymentGVK.Kind,
+			Profile:      "default",
+		})
+
+		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
+
+		By("Manually changing the profile label on the VPA")
+		vpa, err := testutils.GetVPA(ctx, dep.GetNamespace(), vpaName)
+		Expect(err).ToNot(HaveOccurred())
+		patch := client.MergeFrom(vpa.DeepCopy())
+		labels := vpa.GetLabels()
+		labels[profileAnnotation] = "tampered"
+		vpa.SetLabels(labels)
+		Expect(testutils.K8sClient.Patch(ctx, vpa, patch)).To(Succeed())
+
+		By("Waiting for the workload reconciler to restore the profile label")
+		Eventually(func(g Gomega) {
+			vpa, err := testutils.GetVPA(ctx, dep.GetNamespace(), vpaName)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(vpa.GetLabels()).To(HaveKeyWithValue(profileAnnotation, "default"))
+		}).WithContext(ctx).Within(30 * time.Second).ProbeEvery(1 * time.Second).Should(Succeed())
+	})
+
+	It("Deletes a managed VPA whose ownerRef kind does not match any existing workload", func(ctx SpecContext) {
+		// Create a Deployment but craft a VPA whose controllerRef claims a StatefulSet owner.
+		dep := testutils.CreateDeployment(ctx, ns, testutils.GenerateUniqueName("dep"))
+
+		vpaName := testutils.GenerateUniqueName("kind-mismatch-vpa")
+		spec := map[string]any{
+			"targetRef": map[string]any{
+				"apiVersion": controller.StatefulSetGVK.GroupVersion().String(),
+				"kind":       controller.StatefulSetGVK.Kind,
+				"name":       dep.GetName(),
+			},
+		}
+
+		testutils.CreateManagedVPAWithOwnerRef(
+			ctx,
+			ns,
+			vpaName,
+			managedLabel,
+			controller.StatefulSetGVK, // mismatched kind
+			dep.GetName(),
+			dep.GetUID(),
+			spec,
+		)
+
+		testutils.ExpectVPA(ctx, ns, vpaName, managedLabel)
+		testutils.LogBuffer.Reset()
+
+		// VPAReconciler should not find the referenced StatefulSet and delete the VPA.
+		testutils.ExpectVPANotFound(ctx, ns, vpaName)
+
+		testutils.ContainsLogs(
+			fmt.Sprintf("\"owner gone; deleting VPA\",\"namespace\":%q,\"vpa\":%q,\"ownerKind\":\"StatefulSet\",\"ownerName\":%q", ns, vpaName, dep.GetName()),
+			4*time.Second,
+			1*time.Second,
+		)
+	})
 })
