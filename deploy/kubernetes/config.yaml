@@ -2,6 +2,7 @@
 defaultProfile: default
 profiles:
   default:
+    # updateMode must be provided as a string ("Off", "Auto", "Initial", etc.).
     updatePolicy:
       updateMode: Off
     resourcePolicy:
@@ -11,6 +12,7 @@ profiles:
   safe:
     # optional per-profile VPA name override
     nameTemplate: "{{ .WorkloadName }}-vpa"
+    # Profiles are defined inline; do not wrap fields under a separate "spec:" key.
     updatePolicy:
       updateMode: Auto
     resourcePolicy:

@@ -50,6 +50,7 @@ If running in namespaced mode, ensure the associated `Role` and `RoleBinding` ar
 defaultProfile: default
 profiles:
   default:
+    # Note: updateMode must be a string ("Off", "Auto", "Initial", etc.).
     updatePolicy:
       updateMode: Off
     resourcePolicy:
@@ -59,6 +60,7 @@ profiles:
   safe:
     # optional per-profile VPA name override
     nameTemplate: "{{ .WorkloadName }}-vpa"
+    # Profiles are defined inline; do not wrap fields under a separate "spec:" key.
     updatePolicy:
       updateMode: Auto
     resourcePolicy:

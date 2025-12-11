@@ -80,6 +80,15 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		setupLog.Info("flag overrides", "values", strings.Join(overrides, ", "))
 	}
 
+	// Log profiles
+	for name, profile := range cfg.Profiles {
+		setupLog.Info("loaded profile",
+			"name", name,
+			"nameTemplate", utils.DefaultIfZero(profile.NameTemplate, flags.DefaultNameTemplate),
+			"spec", profile.Spec,
+		)
+	}
+
 	// Profiles config
 	profilesCfg := controller.ProfileConfig{
 		Entries:      cfg.Profiles,
