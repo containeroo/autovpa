@@ -13,6 +13,35 @@ AutoVPA watches Deployments, StatefulSets, and DaemonSets and ensures a matching
 - VPA CRDs installed in the cluster.
 - Config file mounted at the configured `--config`.
 
+## Quick Start
+
+```bash
+# Install (Helm)
+helm upgrade --install autovpa ./deploy/kubernetes/chart/autovpa
+
+# Or apply kustomize manifests
+kubectl apply -k deploy/kubernetes
+```
+
+Annotate a workload to opt in and AutoVPA creates/updates the matching VPA using your default template (`{{ .WorkloadName }}-{{ .Profile }}-vpa` by default):
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: demo
+  annotations:
+    autovpa.containeroo.ch/profile: default
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/example/api:latest
+```
+
 ## Installation and Usage
 
 - **Helm**: `helm upgrade --install autovpa ./deploy/kubernetes/chart/autovpa`
@@ -42,6 +71,13 @@ If running in namespaced mode, ensure the associated `Role` and `RoleBinding` ar
   - a `defaultProfile` key, and
   - a `profiles` map containing per-profile settings (name template override, resource policy, etc.).
     Any `targetRef` fields included in profile specs are ignored - AutoVPA always sets these automatically for you.
+
+### Profile file basics
+
+- `defaultProfile` must name one of the entries in `profiles`.
+- Profile specs are inline (no nested `spec:` key). `targetRef` is ignored and will be set automatically.
+- `nameTemplate` is optional per profile; otherwise the global `--vpa-name-template` is used.
+- `updatePolicy.updateMode` must be a string (`Off`, `Auto`, `Initial`, etc.); boolean `true`/`false` is tolerated and normalized to `Auto`/`Off`.
 
 ## Profile file example (config.yaml)
 
@@ -178,6 +214,17 @@ spec:
 \*) Variables are available in the template string: `.WorkloadName`, `.Namespace`, `.Kind`, `.Profile`.
 See [Func hints](#func-hints) for template helper details.
 
+### Labels and annotations
+
+- Managed label (default) `autovpa.containeroo.ch/managed=true` marks VPAs the operator owns; override with `--managed-label`.
+- Profile annotation (default) `autovpa.containeroo.ch/profile=<profile>` opts workloads in; override with `--profile-annotation`.
+- Keys must be unique; the operator will refuse to start if managed/profile keys collide.
+
+### Metrics and HTTP/2
+
+- Metrics are enabled by default on `:8443` with TLS. Toggle with `--metrics-enabled`, `--metrics-bind-address`, `--metrics-secure`.
+- HTTP/2 is disabled by default for compatibility; enable with `--enable-http2` if your ingress/stack requires it.
+
 ## Prometheus Metrics
 
 AutoVPA exposes counters for the VPAs it creates, updates, or skips while reconciling workloads.
@@ -205,7 +252,15 @@ GOCACHE=$(pwd)/.cache/go-build go run ./cmd/main.go \
 
 ## Testing
 
-- Unit tests: `GOCACHE=$(pwd)/.cache/go-build go test ./...`
+- Unit tests: `GOCACHE=$(pwd)/.cache/go-build go test ./...` (or `make test` for fmt/vet/envtest + unit tests).
+- E2E: `make e2e` (uses an existing cluster; see `make kind`/`make delete-kind` for local Kind helper). Scope with `make e2e-generic`, `make e2e-namespaced`, or `make e2e-vpa`.
+- Lint: `make lint` or `make lint-fix`.
+
+## Troubleshooting
+
+- **VPA CRD missing**: startup fails unless `--disable-crd-check` is set. Install the VPA CRD or add the flag for environments where the CRD is not present yet.
+- **Annotation missing / profile not found**: AutoVPA logs and emits events but does not requeue aggressively. Add the profile annotation or fix the profile name in your config.
+- **Invalid name template**: the operator validates templates at startup; fix the template string or profile override before redeploying.
 
 ## License
 
