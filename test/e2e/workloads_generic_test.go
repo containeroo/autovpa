@@ -359,7 +359,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 		testutils.ContainsLogs(
 			fmt.Sprintf(
-				"\"profile not found; skipping VPA reconciliation\",\"namespace\":%q,\"workload\":%q,\"kind\":%q,\"profile\":\"unknown\"",
+				"\"profile not found; skipping VPA reconciliation\",\"namespace\":%q,\"workload\":%q,\"kind\":%q,\"controller\":\"Deployment\",\"profile\":\"unknown\"",
 				ns,
 				dep.Name,
 				dep.GroupVersionKind().Kind,

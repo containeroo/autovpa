@@ -73,7 +73,7 @@ func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	log := r.Logger.WithValues(
 		"namespace", req.Namespace,
 		"vpa", req.Name,
-		"controller", vpaGVK,
+		"controller", vpaGVK.Kind,
 	)
 
 	// Load the VPA; if missing, nothing to do.

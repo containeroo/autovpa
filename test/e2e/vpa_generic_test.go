@@ -98,7 +98,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 		testutils.ExpectVPANotFound(ctx, ns, vpaName)
 
 		testutils.ContainsLogs(
-			fmt.Sprintf("\"owner gone; deleting VPA\",\"namespace\":%q,\"vpa\":%q,\"ownerKind\":\"Deployment\",\"ownerName\":%q", ns, vpaName, ownerName),
+			fmt.Sprintf("\"owner gone; deleting VPA\",\"namespace\":%q,\"vpa\":%q,\"controller\":\"VerticalPodAutoscaler\",\"ownerKind\":\"Deployment\",\"ownerName\":%q", ns, vpaName, ownerName),
 			4*time.Second,
 			1*time.Second,
 		)
@@ -197,7 +197,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 		testutils.ExpectVPANotFound(ctx, ns, vpaName)
 
 		testutils.ContainsLogs(
-			fmt.Sprintf("\"owner gone; deleting VPA\",\"namespace\":%q,\"vpa\":%q,\"ownerKind\":\"StatefulSet\",\"ownerName\":%q", ns, vpaName, dep.GetName()),
+			fmt.Sprintf("\"owner gone; deleting VPA\",\"namespace\":%q,\"vpa\":%q,\"controller\":\"VerticalPodAutoscaler\",\"ownerKind\":\"StatefulSet\",\"ownerName\":%q", ns, vpaName, dep.GetName()),
 			4*time.Second,
 			1*time.Second,
 		)

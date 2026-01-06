@@ -97,7 +97,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 		"namespace", ns,
 		"workload", name,
 		"kind", targetGVK.Kind,
-		"controller", targetGVK,
+		"controller", targetGVK.Kind,
 	)
 
 	// Check profile annotation (opt-in).
