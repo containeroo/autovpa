@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 
+	"github.com/containeroo/autovpa/internal/metrics"
 	"github.com/containeroo/autovpa/internal/predicates"
 	"github.com/go-logr/logr"
 
@@ -72,11 +73,13 @@ func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	log := r.Logger.WithValues(
 		"namespace", req.Namespace,
 		"vpa", req.Name,
+		"controller", vpaGVK,
 	)
 
 	// Load the VPA; if missing, nothing to do.
 	vpa, err := r.fetchExistingVPA(ctx, req.NamespacedName)
 	if err != nil {
+		metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "get").Inc()
 		return ctrl.Result{}, err
 	}
 	if vpa == nil {
@@ -104,8 +107,13 @@ func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		)
 
 		if err := r.deleteManagedVPA(ctx, vpa); err != nil {
+			metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "delete").Inc()
 			return ctrl.Result{}, err
 		}
+
+		profile := profileFromLabels(vpa.GetLabels(), r.Meta.ProfileKey)
+		metrics.VPADeletedOrphaned.WithLabelValues(vpaNamespace).Inc()
+		metrics.VPAManaged.WithLabelValues(vpaNamespace, profile).Dec()
 		return ctrl.Result{}, nil
 	}
 
@@ -114,6 +122,7 @@ func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			// Error is not "not found" → return to retry.
+			metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "fetch_owner").Inc()
 			return ctrl.Result{}, err
 		}
 
@@ -130,8 +139,13 @@ func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		)
 
 		if err := r.deleteManagedVPA(ctx, vpa); err != nil {
+			metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "delete").Inc()
 			return ctrl.Result{}, err
 		}
+
+		profile := profileFromLabels(vpa.GetLabels(), r.Meta.ProfileKey)
+		metrics.VPADeletedOwnerGone.WithLabelValues(vpaNamespace, gvk.Kind).Inc()
+		metrics.VPAManaged.WithLabelValues(vpaNamespace, profile).Dec()
 		return ctrl.Result{}, nil
 	}
 

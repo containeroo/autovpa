@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/containeroo/tinyflags"
 
@@ -76,8 +75,9 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 	if err := cfg.Validate(flags.DefaultNameTemplate); err != nil {
 		return fmt.Errorf("failed to validate profiles: %w", err)
 	}
-	if overrides := flags.ChangedFlags(); len(overrides) > 0 {
-		setupLog.Info("flag overrides", "values", strings.Join(overrides, ", "))
+
+	if len(flags.OverriddenValues) > 0 {
+		setupLog.Info("CLI Overrides", "overrides", flags.OverriddenValues)
 	}
 
 	// Log profiles

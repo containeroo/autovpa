@@ -39,8 +39,8 @@ RUN mkdir -p /outfs/work /outfs/tmp \
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
-COPY --from=prep /outfs/work /work
-COPY --from=prep /outfs/tmp  /tmp
+COPY --from=builder /outfs/work /work
+COPY --from=builder /outfs/tmp  /tmp
 ENV HOME=/tmp
 WORKDIR /work
 COPY --from=builder /workspace/autovpa .

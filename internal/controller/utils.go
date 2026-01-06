@@ -82,3 +82,14 @@ func buildVPASpec(
 func ownerRefsEqual(a, b []metav1.OwnerReference) bool {
 	return apiequality.Semantic.DeepEqual(a, b)
 }
+
+// profileFromLabels returns the profile label value or "unknown" if absent.
+func profileFromLabels(labels map[string]string, key string) string {
+	if labels == nil {
+		return "unknown"
+	}
+	if v, ok := labels[key]; ok && v != "" {
+		return v
+	}
+	return "unknown"
+}

@@ -97,6 +97,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 		"namespace", ns,
 		"workload", name,
 		"kind", targetGVK.Kind,
+		"controller", targetGVK,
 	)
 
 	// Check profile annotation (opt-in).
@@ -122,7 +123,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 		).Inc()
 
 		// User opted out → delete all operator-managed VPAs for this workload.
-		if err := b.DeleteAllManagedVPAsForWorkload(ctx, obj, targetGVK.Kind); err != nil {
+		if err := b.DeleteManagedVPAsForOptOut(ctx, obj, targetGVK.Kind); err != nil {
 			return ctrl.Result{}, err
 		}
 		// Do not return an error to avoid requeuing the workload.
@@ -164,7 +165,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 	}
 
 	// Delete obsolete VPAs (e.g. if name template or profile changed).
-	if err := b.DeleteObsoleteManagedVPAs(ctx, obj, desired.Name); err != nil {
+	if err := b.DeleteObsoleteManagedVPAs(ctx, obj, targetGVK.Kind, desired.Name); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -196,6 +197,10 @@ func (b *BaseReconciler) ReconcileWorkload(
 			ns,
 			name,
 			targetGVK.Kind,
+			selectedProfile,
+		).Inc()
+		metrics.VPAManaged.WithLabelValues(
+			ns,
 			selectedProfile,
 		).Inc()
 		return ctrl.Result{}, nil
@@ -242,6 +247,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 func (b *BaseReconciler) DeleteObsoleteManagedVPAs(
 	ctx context.Context,
 	owner client.Object,
+	workloadKind string,
 	keepName string,
 ) error {
 	vpas, err := b.listManagedVPAs(ctx, owner.GetNamespace())
@@ -274,6 +280,10 @@ func (b *BaseReconciler) DeleteObsoleteManagedVPAs(
 			"workload", owner.GetName(),
 		)
 
+		profile := profileFromLabels(vpa.GetLabels(), b.Meta.ProfileKey)
+		metrics.VPADeletedObsolete.WithLabelValues(owner.GetNamespace(), workloadKind).Inc()
+		metrics.VPAManaged.WithLabelValues(owner.GetNamespace(), profile).Dec()
+
 		b.Recorder.Eventf(
 			owner,
 			corev1.EventTypeNormal,
@@ -285,15 +295,36 @@ func (b *BaseReconciler) DeleteObsoleteManagedVPAs(
 	return nil
 }
 
-// DeleteAllManagedVPAsForWorkload deletes every operator-managed VPA that is
-// owned by the specified workload. This is used when a workload:
-//   - is deleted
-//   - removes its profile annotation
-//   - or otherwise opts out of VPA management.
-func (b *BaseReconciler) DeleteAllManagedVPAsForWorkload(
+// DeleteManagedVPAsForOptOut deletes managed VPAs when a workload opts out.
+func (b *BaseReconciler) DeleteManagedVPAsForOptOut(
 	ctx context.Context,
 	owner client.Object,
 	workloadKind string,
+) error {
+	return b.deleteManagedVPAs(ctx, owner, workloadKind, func(ns, profile string) {
+		metrics.VPADeletedOptOut.WithLabelValues(ns, workloadKind).Inc()
+		metrics.VPAManaged.WithLabelValues(ns, profile).Dec()
+	})
+}
+
+// DeleteManagedVPAsForGoneWorkload deletes managed VPAs when the workload was removed.
+func (b *BaseReconciler) DeleteManagedVPAsForGoneWorkload(
+	ctx context.Context,
+	owner client.Object,
+	workloadKind string,
+) error {
+	return b.deleteManagedVPAs(ctx, owner, workloadKind, func(ns, profile string) {
+		metrics.VPADeletedWorkloadGone.WithLabelValues(ns, workloadKind).Inc()
+		metrics.VPAManaged.WithLabelValues(ns, profile).Dec()
+	})
+}
+
+// deleteManagedVPAs removes all managed VPAs for an owner and runs the provided callback.
+func (b *BaseReconciler) deleteManagedVPAs(
+	ctx context.Context,
+	owner client.Object,
+	workloadKind string,
+	onDelete func(namespace, profile string),
 ) error {
 	vpas, err := b.listManagedVPAs(ctx, owner.GetNamespace())
 	if err != nil {
@@ -318,6 +349,11 @@ func (b *BaseReconciler) DeleteAllManagedVPAsForWorkload(
 				"namespace", owner.GetNamespace(),
 				"workload", owner.GetName(),
 			)
+
+			if onDelete != nil {
+				profile := profileFromLabels(vpa.GetLabels(), b.Meta.ProfileKey)
+				onDelete(owner.GetNamespace(), profile)
+			}
 
 			b.Recorder.Eventf(
 				owner,

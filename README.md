@@ -232,14 +232,23 @@ AutoVPA exposes counters for the VPAs it creates, updates, or skips while reconc
 ### Available Metrics
 
 1. **VPAs Created**
-   - **Metric:** `autovpavpa_created_total`
+   - **Metric:** `autovpa_vpa_created_total`
    - **Labels:** `namespace`, `name`, `kind`, `profile`
 2. **VPAs Updated**
-   - **Metric:** `autovpavpa_updated_total`
+   - **Metric:** `autovpa_vpa_updated_total`
    - **Labels:** `namespace`, `name`, `kind`, `profile`
 3. **Workloads Skipped**
-   - **Metric:** `autovpavpa_skipped_total`
+   - **Metric:** `autovpa_vpa_skipped_total`
    - **Labels:** `namespace`, `name`, `kind`, `reason`
+4. **Managed VPAs Deleted (cleanup)**
+   - **Metrics:** `autovpa_vpa_deleted_obsolete_total`, `autovpa_vpa_deleted_opt_out_total`, `autovpa_vpa_deleted_workload_gone_total`, `autovpa_vpa_deleted_owner_gone_total`, `autovpa_vpa_deleted_orphaned_total`
+   - **Labels:** `namespace`, `kind` (or just `namespace` for orphaned)
+5. **Managed VPA Inventory**
+   - **Metric:** `autovpa_managed_vpa`
+   - **Labels:** `namespace`, `profile`
+6. **Reconcile Errors**
+   - **Metric:** `autovpa_reconcile_errors_total`
+   - **Labels:** `controller`, `kind`, `reason`
 
 Alerts for missing metrics and skip spikes are provided in `deploy/kubernetes/manifests/prometheusrule.yaml` and the Helm chart.
 

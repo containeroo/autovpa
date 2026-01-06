@@ -66,7 +66,7 @@ func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// with an ownerRef pointing at this name/namespace; clean them up.
 			logger.Info("DaemonSet not found; cleaning managed VPAs if any")
 
-			if err := r.DeleteAllManagedVPAsForWorkload(
+			if err := r.DeleteManagedVPAsForGoneWorkload(
 				ctx,
 				&appsv1.DaemonSet{
 					ObjectMeta: metav1.ObjectMeta{

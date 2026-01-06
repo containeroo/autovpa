@@ -48,6 +48,61 @@ var (
 		},
 		[]string{"namespace", "name", "kind", "reason"},
 	)
+
+	// VPADeleted... counters track cleanup events by cause.
+	VPADeletedObsolete = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "autovpa_vpa_deleted_obsolete_total",
+			Help: "Total number of managed VPAs deleted because they became obsolete (name/profile change).",
+		},
+		[]string{"namespace", "kind"},
+	)
+	VPADeletedOptOut = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "autovpa_vpa_deleted_opt_out_total",
+			Help: "Total number of managed VPAs deleted because the workload opted out.",
+		},
+		[]string{"namespace", "kind"},
+	)
+	VPADeletedWorkloadGone = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "autovpa_vpa_deleted_workload_gone_total",
+			Help: "Total number of managed VPAs deleted because the workload no longer exists.",
+		},
+		[]string{"namespace", "kind"},
+	)
+	VPADeletedOwnerGone = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "autovpa_vpa_deleted_owner_gone_total",
+			Help: "Total number of managed VPAs deleted because the referenced owner is missing.",
+		},
+		[]string{"namespace", "kind"},
+	)
+	VPADeletedOrphaned = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "autovpa_vpa_deleted_orphaned_total",
+			Help: "Total number of managed VPAs deleted because they lacked a controller owner reference.",
+		},
+		[]string{"namespace"},
+	)
+
+	// VPAManaged tracks the current inventory of managed VPAs by namespace/profile.
+	VPAManaged = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "autovpa_managed_vpa",
+			Help: "Current number of managed VPAs by namespace and profile.",
+		},
+		[]string{"namespace", "profile"},
+	)
+
+	// ReconcileErrors counts reconciliation errors by controller/kind/reason.
+	ReconcileErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "autovpa_reconcile_errors_total",
+			Help: "Total number of reconciliation errors, labeled by controller, kind, and reason.",
+		},
+		[]string{"controller", "kind", "reason"},
+	)
 )
 
 func init() {
@@ -55,5 +110,12 @@ func init() {
 		VPACreated,
 		VPAUpdated,
 		VPASkipped,
+		VPADeletedObsolete,
+		VPADeletedOptOut,
+		VPADeletedWorkloadGone,
+		VPADeletedOwnerGone,
+		VPADeletedOrphaned,
+		VPAManaged,
+		ReconcileErrors,
 	)
 }

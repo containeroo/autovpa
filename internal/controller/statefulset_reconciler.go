@@ -66,7 +66,7 @@ func (r *StatefulSetReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			// with an ownerRef pointing at this name/namespace; clean them up.
 			logger.Info("StatefulSet not found; cleaning managed VPAs if any")
 
-			if err := r.DeleteAllManagedVPAsForWorkload(
+			if err := r.DeleteManagedVPAsForGoneWorkload(
 				ctx,
 				&appsv1.StatefulSet{
 					ObjectMeta: metav1.ObjectMeta{
