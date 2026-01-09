@@ -36,10 +36,14 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 	var ns string
 
 	BeforeAll(func() {
+		By("Stopping any running operator instance")
 		testutils.StopOperator()
 		time.Sleep(4 * time.Second) // wait for operator to stop
+
+		By("Resetting log buffer before test suite")
 		testutils.LogBuffer.Reset()
 
+		By("Starting operator with test configuration")
 		configPath := testutils.WriteProfiles("autovpa-profiles.yaml")
 		testutils.StartOperatorWithFlags([]string{
 			"--leader-elect=false",
@@ -52,14 +56,17 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 	})
 
 	AfterAll(func() {
+		By("Stopping operator after test suite")
 		testutils.StopOperator()
 	})
 
 	BeforeEach(func(ctx SpecContext) {
+		By("Creating a fresh namespace for the test")
 		ns = testutils.NSManager.CreateNamespace(ctx)
 	})
 
 	AfterEach(func(ctx SpecContext) {
+		By("Cleaning up namespace and resetting logs")
 		testutils.NSManager.Cleanup(ctx)
 		testutils.LogBuffer.Reset()
 	})
@@ -79,7 +86,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 			},
 		}
 
-		// We need to create a VPA with a controllerRef pointing to a not existing Deployment
+		By("Creating a managed VPA with a controllerRef pointing to a non-existing Deployment")
 		testutils.CreateManagedVPAWithOwnerRef(
 			ctx,
 			ns,
@@ -91,12 +98,16 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 			spec,
 		)
 
+		By("Ensuring the VPA exists before the reconciler deletes it")
 		testutils.ExpectVPA(ctx, ns, vpaName, managedLabel)
+
+		By("Resetting logs so we only assert logs produced by this reconciliation")
 		testutils.LogBuffer.Reset()
 
-		// VPAReconciler should notice the missing owner and delete the VPA.
+		By("Waiting for the VPAReconciler to delete the orphaned VPA")
 		testutils.ExpectVPANotFound(ctx, ns, vpaName)
 
+		By("Verifying the expected log line was emitted")
 		testutils.ContainsLogs(
 			fmt.Sprintf("\"owner gone; deleting VPA\",\"namespace\":%q,\"vpa\":%q,\"controller\":\"VerticalPodAutoscaler\",\"ownerKind\":\"Deployment\",\"ownerName\":%q", ns, vpaName, ownerName),
 			4*time.Second,
@@ -106,6 +117,8 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 
 	It("Restores the managed label after manual removal when the workload has a profile", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -115,12 +128,13 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
-		// Ensure the VPA exists and is marked as managed.
+		By("Ensuring the managed VPA exists")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 
 		By("Manually removing the managed label from the VPA")
 		vpa, err := testutils.GetVPA(ctx, dep.GetNamespace(), vpaName)
 		Expect(err).ToNot(HaveOccurred())
+
 		patch := client.MergeFrom(vpa.DeepCopy())
 		labels := vpa.GetLabels()
 		Expect(labels).To(HaveKeyWithValue(managedLabel, "true"))
@@ -138,6 +152,8 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 
 	It("Restores the profile label after manual tampering when the workload has a profile", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -147,11 +163,13 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Ensuring the managed VPA exists")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 
 		By("Manually changing the profile label on the VPA")
 		vpa, err := testutils.GetVPA(ctx, dep.GetNamespace(), vpaName)
 		Expect(err).ToNot(HaveOccurred())
+
 		patch := client.MergeFrom(vpa.DeepCopy())
 		labels := vpa.GetLabels()
 		labels[profileKey] = "tampered"
@@ -167,7 +185,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 	})
 
 	It("Deletes a managed VPA whose ownerRef kind does not match any existing workload", func(ctx SpecContext) {
-		// Create a Deployment but craft a VPA whose controllerRef claims a StatefulSet owner.
+		By("Creating a Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, testutils.GenerateUniqueName("dep"))
 
 		vpaName := testutils.GenerateUniqueName("kind-mismatch-vpa")
@@ -179,6 +197,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 			},
 		}
 
+		By("Creating a managed VPA with a mismatched controllerRef kind")
 		testutils.CreateManagedVPAWithOwnerRef(
 			ctx,
 			ns,
@@ -190,16 +209,64 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 			spec,
 		)
 
+		By("Ensuring the VPA exists before deletion")
 		testutils.ExpectVPA(ctx, ns, vpaName, managedLabel)
+
+		By("Resetting logs to isolate reconciliation output")
 		testutils.LogBuffer.Reset()
 
-		// VPAReconciler should not find the referenced StatefulSet and delete the VPA.
+		By("Waiting for the VPAReconciler to delete the VPA")
 		testutils.ExpectVPANotFound(ctx, ns, vpaName)
 
+		By("Verifying the expected log line was emitted")
 		testutils.ContainsLogs(
 			fmt.Sprintf("\"owner gone; deleting VPA\",\"namespace\":%q,\"vpa\":%q,\"controller\":\"VerticalPodAutoscaler\",\"ownerKind\":\"StatefulSet\",\"ownerName\":%q", ns, vpaName, dep.GetName()),
 			4*time.Second,
 			1*time.Second,
 		)
+	})
+
+	It("does not spam reconcile logs when a managed VPA is already in desired state", func(ctx SpecContext) {
+		timeout := 30 * time.Second
+		interval := 250 * time.Millisecond
+		quietWindow := 10 * time.Second
+
+		depName := testutils.GenerateUniqueName("dep-nosspam")
+
+		By("Creating an opted-in Deployment")
+		dep := testutils.CreateDeployment(
+			ctx,
+			ns,
+			depName,
+			testutils.WithAnnotation(profileKey, "default"),
+		)
+
+		vpaName, err := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
+			WorkloadName: dep.GetName(),
+			Namespace:    dep.GetNamespace(),
+			Kind:         DeploymentGVK.Kind,
+			Profile:      "default",
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for the VPA to exist")
+		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
+
+		By("Waiting until the operator has settled")
+		testutils.ContainsLogs(`"created VPA"`, timeout, interval)
+
+		time.Sleep(2 * time.Second)
+
+		By("Resetting the log buffer to measure the quiet window")
+		testutils.LogBuffer.Reset()
+
+		By("Ensuring no update spam during steady state")
+		testutils.ContainsNotLogs(`"updated VPA"`, quietWindow, interval)
+
+		By("Ensuring the VPA safety-net reconciler stays quiet on the happy path")
+		testutils.ContainsNotLogs(`managed VPA has valid controller owner`, quietWindow, interval)
+
+		By("Ensuring no repeated update logs occurred")
+		testutils.CountLogOccurrences(`"updated VPA"`, 0, timeout, interval)
 	})
 })

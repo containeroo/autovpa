@@ -35,9 +35,14 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 	var ns string
 
 	BeforeAll(func() {
+		By("Stopping any running operator instance")
 		testutils.StopOperator()
 		time.Sleep(4 * time.Second) // wait for operator to stop
+
+		By("Resetting log buffer before test suite")
 		testutils.LogBuffer.Reset()
+
+		By("Starting operator with test configuration")
 		configPath := testutils.WriteProfiles("autovpa-profiles.yaml")
 		testutils.StartOperatorWithFlags([]string{
 			"--leader-elect=false",
@@ -50,20 +55,25 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 	})
 
 	AfterAll(func() {
+		By("Stopping operator after test suite")
 		testutils.StopOperator()
 	})
 
 	BeforeEach(func(ctx SpecContext) {
+		By("Creating a fresh namespace for the test")
 		ns = testutils.NSManager.CreateNamespace(ctx)
 	})
 
 	AfterEach(func(ctx SpecContext) {
+		By("Cleaning up namespace and resetting logs")
 		testutils.NSManager.Cleanup(ctx)
 		testutils.LogBuffer.Reset()
 	})
 
 	It("Creates a VPA for a Deployment", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -73,11 +83,14 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 	})
 
 	It("Creates a VPA for a StatefulSet", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("sts")
+
+		By("Creating an opted-in StatefulSet")
 		sts := testutils.CreateStatefulSet(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -87,11 +100,14 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, sts.GetNamespace(), vpaName, managedLabel)
 	})
 
 	It("Creates a VPA for a DaemonSet", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("ds")
+
+		By("Creating an opted-in DaemonSet")
 		ds := testutils.CreateDaemonSet(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -101,13 +117,17 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, ds.GetNamespace(), vpaName, managedLabel)
 	})
 
 	It("Uses profile name template overrides", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating a Deployment using a profile that overrides nameTemplate")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "auto"))
 
+		By("Waiting for the managed VPA to be created with the overridden name")
 		// The "auto" profile in the test config sets nameTemplate to "{{ .WorkloadName }}-vpa".
 		expectedName := dep.GetName() + "-vpa"
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), expectedName, managedLabel)
@@ -115,6 +135,8 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Skips workloads without profile annotation", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating a Deployment without the profile annotation (opt-out)")
 		dep := testutils.CreateDeployment(ctx, ns, name)
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -124,11 +146,14 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Ensuring no managed VPA is created")
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 	})
 
 	It("Deletes VPA when workload removes the profile annotation (opt-out)", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -137,6 +162,8 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Kind:         DeploymentGVK.Kind,
 			Profile:      "default",
 		})
+
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 
 		By("Removing the profile annotation to opt out")
@@ -144,11 +171,14 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 		delete(dep.Annotations, profileKey)
 		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
 
+		By("Waiting for the managed VPA to be deleted")
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 	})
 
 	It("Leaves an unmanaged VPA alone after opt-out and managed-label removal", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -157,12 +187,16 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Kind:         DeploymentGVK.Kind,
 			Profile:      "default",
 		})
+
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 
 		By("Opting out by removing the profile annotation")
 		patch := client.MergeFrom(dep.DeepCopy())
 		delete(dep.Annotations, profileKey)
 		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
+
+		By("Waiting for the managed VPA to be deleted")
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 
 		By("Recreating the VPA without the managed label; operator should ignore it")
@@ -183,6 +217,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			dep,
 		)
 
+		By("Ensuring the operator does not re-add the managed label")
 		Consistently(func(g Gomega) {
 			vpa, err := testutils.GetVPA(ctx, dep.GetNamespace(), vpaName)
 			g.Expect(err).ToNot(HaveOccurred())
@@ -192,6 +227,8 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Replaces VPA when name template changes", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -201,6 +238,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 
 		By("Changing the profile so the name template renders a different name")
@@ -208,22 +246,27 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 		dep.Annotations[profileKey] = "auto"
 		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
 
-		By("Waiting for the new VPA is created and the old one to be gone")
+		By("Waiting for the new VPA to be created and the old one to be deleted")
 		// Profile "auto" overrides the name template to "{{ .WorkloadName }}-vpa".
 		newVPAName := dep.GetName() + "-vpa"
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), newVPAName, managedLabel)
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 
+		By("Verifying the expected 'deleted obsolete VPA' log line was emitted")
 		testutils.ContainsLogs(
 			fmt.Sprintf("\"deleted obsolete VPA\",\"vpa\":%q,\"namespace\":%q,\"workload\":%q", vpaName, ns, dep.Name),
 			4*time.Second,
-			1*time.Second)
+			1*time.Second,
+		)
 	})
 
 	It("Matches VPA spec to profile fields", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment with the 'auto' profile")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "auto"))
 
+		By("Waiting for the managed VPA to exist")
 		// auto profile uses nameTemplate "{{ .WorkloadName }}-vpa"
 		vpaName := dep.GetName() + "-vpa"
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
@@ -249,11 +292,14 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			},
 		}
 
+		By("Verifying the VPA spec matches the expected profile rendering")
 		testutils.ExpectVPASpec(ctx, dep.GetNamespace(), vpaName, expected)
 	})
 
 	It("Deployment restart does not trigger a VPA update", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -263,60 +309,75 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 
-		// Clear creation logs so we only observe effects of the restart.
+		By("Resetting logs to only observe effects of the restart")
 		testutils.LogBuffer.Reset()
 
+		By("Restarting the Deployment (rollout restart)")
 		testutils.RestartResource(ctx, dep)
 
-		// Ensure no VPA updates/creations are logged after a restart-only change.
+		By("Ensuring no VPA update/create logs are emitted after restart-only changes")
 		testutils.ContainsNotLogs(
 			fmt.Sprintf("\"updated VPA\",\"vpa\":%q,\"profile\":\"default\"", vpaName),
 			4*time.Second,
-			1*time.Second)
+			1*time.Second,
+		)
 		testutils.ContainsNotLogs(
 			fmt.Sprintf("\"created VPA\",\"vpa\":%q,\"profile\":\"default\"", vpaName),
 			4*time.Second,
-			1*time.Second)
+			1*time.Second,
+		)
 
-		// VPA still exists
+		By("Ensuring the managed VPA still exists")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 	})
 
 	It("Delete statefulset removes VPA", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
+		// NOTE: This test name says StatefulSet, but it creates a Deployment and uses StatefulSetGVK.Kind.
+		// Keeping your original logic unchanged; only adding By().
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
 			Namespace:    dep.GetNamespace(),
 			Kind:         StatefulSetGVK.Kind,
 			Profile:      "default",
 		})
+
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 
-		// Clear creation logs so we only observe effects of the restart.
+		By("Resetting logs to only observe effects of the delete")
 		testutils.LogBuffer.Reset()
 
+		By("Deleting the workload")
 		Expect(testutils.K8sClient.Delete(ctx, dep)).To(Succeed())
 
-		// Ensure no VPA updates/creations are logged after a restart-only change.
+		By("Ensuring no VPA update/create logs are emitted after delete-only changes")
 		testutils.ContainsNotLogs(
 			fmt.Sprintf("\"updated VPA\",\"vpa\":%q,\"profile\":\"default\"", vpaName),
 			4*time.Second,
-			1*time.Second)
+			1*time.Second,
+		)
 		testutils.ContainsNotLogs(
 			fmt.Sprintf("\"created VPA\",\"vpa\":%q,\"profile\":\"default\"", vpaName),
 			4*time.Second,
-			1*time.Second)
+			1*time.Second,
+		)
 
-		// VPA still exists
+		By("Waiting for the managed VPA to be deleted")
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 	})
 
 	It("Scaling deployment up does not trigger a VPA update", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -326,26 +387,32 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 
-		// Clear creation logs so we only observe effects of the restart.
+		By("Resetting logs to only observe effects of scaling")
 		testutils.LogBuffer.Reset()
 
+		By("Scaling the Deployment")
 		testutils.ScaleResource(ctx, dep, 2)
 
-		// Ensure no VPA updates/creations are logged after a restart-only change.
+		By("Ensuring no VPA update/create logs are emitted after scaling-only changes")
 		testutils.ContainsNotLogs(
 			fmt.Sprintf("\"updated VPA\",\"vpa\":%q,\"profile\":\"default\"", vpaName),
 			4*time.Second,
-			1*time.Second)
+			1*time.Second,
+		)
 		testutils.ContainsNotLogs(
 			fmt.Sprintf("\"created VPA\",\"vpa\":%q,\"profile\":\"default\"", vpaName),
 			4*time.Second,
-			1*time.Second)
+			1*time.Second,
+		)
 	})
 
 	It("Unknown profile", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating a Deployment with an unknown profile")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "unknown"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -355,8 +422,10 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Profile:      "unknown",
 		})
 
+		By("Ensuring no managed VPA is created")
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 
+		By("Verifying the expected 'profile not found' log line was emitted")
 		testutils.ContainsLogs(
 			fmt.Sprintf(
 				"\"profile not found; skipping VPA reconciliation\",\"namespace\":%q,\"workload\":%q,\"kind\":%q,\"controller\":\"Deployment\",\"profile\":\"unknown\"",
@@ -365,17 +434,18 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 				dep.GroupVersionKind().Kind,
 			),
 			4*time.Second,
-			1*time.Second)
+			1*time.Second,
+		)
 	})
 
 	It("Cleanup obsolete VPAs", func(ctx SpecContext) {
-		// Create workload without VPA annotation
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating a workload without the profile annotation")
 		dep := testutils.CreateDeployment(ctx, ns, name)
 
 		vpaName := fmt.Sprintf("%s-obsolete-vpa", dep.GetName())
 
-		// create a default VPA spec
 		spec := map[string]any{
 			"targetRef": map[string]any{
 				"apiVersion": DeploymentGVK.GroupVersion().String(),
@@ -384,7 +454,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			},
 		}
 
-		// Create an obsolete VPA.
+		By("Creating an obsolete managed VPA owned by the workload")
 		testutils.CreateVPA(
 			ctx,
 			dep.GetNamespace(),
@@ -394,9 +464,11 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			map[string]string{},
 			dep,
 		)
+
+		By("Ensuring the obsolete VPA exists")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 
-		// Set profile to trigger creation of a new VPA and cleanup of the obsolete one.
+		By("Opting the workload in to trigger desired VPA creation and obsolete cleanup")
 		patch := client.MergeFrom(dep.DeepCopy())
 		dep.Annotations = map[string]string{profileKey: "default"}
 		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
@@ -408,7 +480,10 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Waiting for the desired VPA to exist")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), expectedNewName, managedLabel)
+
+		By("Waiting for the obsolete VPA to be deleted")
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 	})
 })

@@ -31,12 +31,17 @@ var _ = Describe("Namespaced mode", Serial, Ordered, func() {
 	var ns string
 
 	BeforeAll(func() {
+		By("Stopping any running operator instance")
 		testutils.StopOperator()
 		time.Sleep(4 * time.Second)
+
+		By("Resetting log buffer before suite")
 		testutils.LogBuffer.Reset()
 
+		By("Creating the watched namespace")
 		ns = testutils.NSManager.CreateNamespace(context.Background())
 
+		By("Starting operator in namespaced mode, watching only the created namespace")
 		configPath := testutils.WriteProfiles("autovpa-profiles.yaml")
 		testutils.StartOperatorWithFlags([]string{
 			"--leader-elect=false",
@@ -50,12 +55,17 @@ var _ = Describe("Namespaced mode", Serial, Ordered, func() {
 	})
 
 	AfterAll(func(ctx SpecContext) {
+		By("Stopping operator after suite")
 		testutils.StopOperator()
+
+		By("Cleaning up watched namespace")
 		testutils.NSManager.Cleanup(ctx)
 	})
 
 	It("Reconciles workloads within the watched namespace", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment inside the watched namespace")
 		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -65,12 +75,17 @@ var _ = Describe("Namespaced mode", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Waiting for the managed VPA to be created")
 		testutils.ExpectVPA(ctx, dep.GetNamespace(), vpaName, managedLabel)
 	})
 
 	It("Skips workloads outside the watched namespace", func(ctx SpecContext) {
+		By("Creating a separate namespace that is not watched by the operator")
 		other := testutils.NSManager.CreateNamespace(ctx)
+
 		name := testutils.GenerateUniqueName("dep")
+
+		By("Creating an opted-in Deployment outside the watched namespace")
 		dep := testutils.CreateDeployment(ctx, other, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
@@ -80,6 +95,7 @@ var _ = Describe("Namespaced mode", Serial, Ordered, func() {
 			Profile:      "default",
 		})
 
+		By("Ensuring no managed VPA is created outside the watched namespace")
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 	})
 })
