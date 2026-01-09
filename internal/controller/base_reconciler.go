@@ -38,7 +38,6 @@ import (
 )
 
 // desiredVPAState is the fully rendered desired state for a workload's VPA.
-// It contains all fields required to create or update the VPA.
 type desiredVPAState struct {
 	Name    string            // VPA name rendered from the name template.
 	Profile string            // Selected profile for the workload.
@@ -47,7 +46,6 @@ type desiredVPAState struct {
 }
 
 // BaseReconciler contains the shared logic for Deployment/StatefulSet/DaemonSet reconcilers.
-// It owns the profile configuration and implements the VPA lifecycle for a single workload.
 type BaseReconciler struct {
 	KubeClient client.Client
 	Logger     *logr.Logger
@@ -130,7 +128,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 		return ctrl.Result{}, nil
 	}
 
-	// Resolve profile (using the annotated profile; workloads without a profile are skipped).
+	// Resolve profile.
 	selectedProfile := utils.DefaultIfZero(profileName, b.Profiles.Default)
 	profile, found := b.Profiles.Entries[selectedProfile]
 	if !found {
@@ -164,7 +162,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 		return ctrl.Result{}, err
 	}
 
-	// Delete obsolete VPAs (e.g. if name template or profile changed).
+	// Delete obsolete VPAs (e.g. name template/profile changed).
 	if err := b.DeleteObsoleteManagedVPAs(ctx, obj, targetGVK.Kind, desired.Name); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -193,16 +191,8 @@ func (b *BaseReconciler) ReconcileWorkload(
 			"Created VPA %s with profile %s", desired.Name, selectedProfile,
 		)
 
-		metrics.VPACreated.WithLabelValues(
-			ns,
-			name,
-			targetGVK.Kind,
-			selectedProfile,
-		).Inc()
-		metrics.VPAManaged.WithLabelValues(
-			ns,
-			selectedProfile,
-		).Inc()
+		metrics.VPACreated.WithLabelValues(ns, name, targetGVK.Kind, selectedProfile).Inc()
+		metrics.VPAManaged.WithLabelValues(ns, selectedProfile).Inc()
 		return ctrl.Result{}, nil
 	}
 
@@ -233,12 +223,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 		"Updated VPA %s to profile %s", desired.Name, selectedProfile,
 	)
 
-	metrics.VPAUpdated.WithLabelValues(
-		ns,
-		name,
-		targetGVK.Kind,
-		selectedProfile,
-	).Inc()
+	metrics.VPAUpdated.WithLabelValues(ns, name, targetGVK.Kind, selectedProfile).Inc()
 	return ctrl.Result{}, nil
 }
 
@@ -421,15 +406,21 @@ func (b *BaseReconciler) fetchExistingVPA(
 	return obj, nil
 }
 
-// mergeVPA merges desired state into an existing VPA and sets the controller reference.
-// The returned object is a deep copy and safe to mutate without affecting the cache.
+// mergeVPA builds a minimal apply-object containing only the fields the operator owns.
+// This avoids dragging cache state (status, managedFields, unrelated metadata) into SSA Apply.
 func (b *BaseReconciler) mergeVPA(
 	existing *unstructured.Unstructured,
 	desired desiredVPAState,
 	owner client.Object,
 ) (*unstructured.Unstructured, error) {
-	updated := existing.DeepCopy() // never mutate cache objects
-	updated.SetLabels(utils.MergeMaps(updated.GetLabels(), desired.Labels))
+	updated := newVPAObject()
+	updated.SetName(existing.GetName())
+	updated.SetNamespace(existing.GetNamespace())
+
+	// Merge existing labels with desired operator labels.
+	updated.SetLabels(utils.MergeMaps(existing.GetLabels(), desired.Labels))
+
+	// Desired spec is fully owned by the operator.
 	updated.Object["spec"] = desired.Spec
 
 	if err := ctrl.SetControllerReference(owner, updated, b.KubeClient.Scheme()); err != nil {

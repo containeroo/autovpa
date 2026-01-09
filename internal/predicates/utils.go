@@ -16,34 +16,106 @@ limitations under the License.
 
 package predicates
 
-import "sigs.k8s.io/controller-runtime/pkg/client"
+import (
+	"reflect"
 
-// hasAnnotation returns true if obj contains the specified annotation key.
-func hasAnnotation(obj client.Object, annotation string) bool {
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+// annotationValue returns the annotation value and whether it is considered "present".
+// "Present" means the key exists AND the value is non-empty (matches controller opt-in logic).
+func annotationValue(obj client.Object, key string) (value string, present bool) {
 	if obj == nil {
-		return false
+		return "", false
 	}
-	objAnnots := obj.GetAnnotations()
-	if objAnnots == nil {
-		return false
+	ann := obj.GetAnnotations()
+	if ann == nil {
+		return "", false
 	}
-	if _, ok := objAnnots[annotation]; ok {
-		return true
+	v, ok := ann[key]
+	if !ok || v == "" {
+		return "", false
 	}
-	return false
+	return v, true
 }
 
-// hasLabel returns true if object contains the specified label.
-func hasLabel(obj client.Object, label string) bool {
+// hasNonEmptyAnnotation returns true if obj contains the annotation key with a non-empty value.
+func hasNonEmptyAnnotation(obj client.Object, key string) bool {
+	_, ok := annotationValue(obj, key)
+	return ok
+}
+
+// hasTrueLabel returns true if obj contains the label key with value "true".
+// This matches controller behavior where "managed" is label == "true", not just presence.
+func hasTrueLabel(obj client.Object, key string) bool {
 	if obj == nil {
 		return false
 	}
-	objLabels := obj.GetLabels()
-	if objLabels == nil {
+	labels := obj.GetLabels()
+	if labels == nil {
 		return false
 	}
-	if _, ok := objLabels[label]; ok {
-		return true
+	return labels[key] == "true"
+}
+
+// deletionJustStarted returns true if deletion was requested on the new object
+// but not on the old one.
+func deletionJustStarted(oldObj, newObj client.Object) bool {
+	return oldObj.GetDeletionTimestamp().IsZero() &&
+		!newObj.GetDeletionTimestamp().IsZero()
+}
+
+// controllerOwnerRef returns the single controller ownerRef (controller=true),
+// or nil if none exists.
+func controllerOwnerRef(obj client.Object) *metav1.OwnerReference {
+	if obj == nil {
+		return nil
+	}
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.Controller != nil && *ref.Controller {
+			r := ref // copy so the pointer is stable
+			return &r
+		}
+	}
+	return nil
+}
+
+// controllerOwnerRefChanged returns true if the controller ownerRef changed
+// (including added/removed).
+func controllerOwnerRefChanged(oldObj, newObj client.Object) bool {
+	return !reflect.DeepEqual(controllerOwnerRef(oldObj), controllerOwnerRef(newObj))
+}
+
+// unstructuredObject attempts to cast obj to *unstructured.Unstructured.
+func unstructuredObject(obj client.Object) (*unstructured.Unstructured, bool) {
+	u, ok := obj.(*unstructured.Unstructured)
+	return u, ok
+}
+
+// specChanged returns true if the unstructured "spec" field changed.
+// If the objects are not unstructured, it returns false (conservative).
+func specChanged(oldObj, newObj client.Object) bool {
+	oldU, ok1 := unstructuredObject(oldObj)
+	newU, ok2 := unstructuredObject(newObj)
+	if !ok1 || !ok2 {
+		return false
+	}
+
+	return !reflect.DeepEqual(oldU.Object["spec"], newU.Object["spec"])
+}
+
+// operatorLabelsChanged returns true if any operator-owned labels differ.
+// This avoids requeueing on user-added labels while still allowing “snap back”.
+func operatorLabelsChanged(oldObj, newObj client.Object, keys ...string) bool {
+	oldL := oldObj.GetLabels()
+	newL := newObj.GetLabels()
+
+	for _, k := range keys {
+		if oldL[k] != newL[k] {
+			return true
+		}
 	}
 	return false
 }

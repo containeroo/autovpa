@@ -35,48 +35,64 @@ import (
 
 // VPAReconciler enforces the *structural correctness* of managed VPAs.
 //
-// This controller is intentionally lightweight. It performs exactly two tasks:
+// This controller is intentionally lightweight and defensive.
+// It does NOT manage desired state (spec, labels, naming).
 //
-//  1. Delete orphaned VPAs
-//     - VPAs with the managed label
-//     - but no valid controller ownerRef
+// Responsibilities:
+//  1. Delete managed VPAs that have no valid controller ownerRef (orphans).
+//  2. Delete managed VPAs whose referenced owner object no longer exists.
 //
-//  2. Delete VPAs whose owner object has been deleted
+// All desired-state reconciliation (create/update/snap-back) is handled
+// exclusively by workload reconcilers (DeploymentReconciler, etc.).
 //
-// All *desired state* (name, labels, annotations, spec) and lifecycle (create/update)
-// is handled exclusively by the workload reconcilers.
-//
-// The VPA reconciler therefore operates as a safety net: it ensures that only
-// valid, workload-owned VPAs remain in the cluster, avoiding resource leaks or
-// stale VPAs left behind by user modification or partial cleanup.
+// The VPAReconciler acts purely as a *safety net* to prevent resource leaks
+// and stale VPAs caused by user tampering or partial cleanup.
 type VPAReconciler struct {
-	KubeClient client.Client        // Kubernetes API client.
-	Logger     *logr.Logger         // Logger for reconciliation events.
-	Recorder   record.EventRecorder // Event recorder for Kubernetes events.
-	Meta       MetaConfig           // Operator metadata (managed label, profile label, etc.).
+	// KubeClient is the Kubernetes API client used for reads and deletes.
+	KubeClient client.Client
+
+	// Logger is used for structured reconciliation logging.
+	Logger *logr.Logger
+
+	// Recorder emits Kubernetes events for visibility.
+	Recorder record.EventRecorder
+
+	// Meta contains operator metadata such as label keys.
+	Meta MetaConfig
 }
 
-// Event types.
+// Kubernetes event reasons emitted by the VPAReconciler.
 const (
-	vpaEventOrphaned     = "OrphanedVPA"
+	// vpaEventOrphaned is emitted when a managed VPA has no controller ownerRef.
+	vpaEventOrphaned = "OrphanedVPA"
+
+	// vpaEventOwnerDeleted is emitted when the owner workload no longer exists.
 	vpaEventOwnerDeleted = "OwnerDeleted"
 )
 
-// Reconcile validates a VPA's ownership and deletes VPAs that:
-//   - are marked as managed, but
-//   - have no valid controller ownerRef, or
-//   - reference an owner object that no longer exists.
+// Reconcile validates a managed VPA’s ownership and deletes invalid VPAs.
 //
-// The reconciler does *not* attempt to recreate or update VPAs -- that is delegated
-// entirely to workload reconcilers (DeploymentReconciler, StatefulSetReconciler, etc.).
-func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// A VPA is deleted when:
+//   - it carries the managed label, AND
+//   - it has no controller ownerRef, OR
+//   - its controller ownerRef points to a non-existent workload.
+//
+// The reconciler never creates or updates VPAs.
+// It only deletes invalid ones.
+//
+// Errors are returned only for failed API operations;
+// “not found” conditions are treated as terminal and non-fatal.
+func (r *VPAReconciler) Reconcile(
+	ctx context.Context,
+	req ctrl.Request,
+) (ctrl.Result, error) {
 	log := r.Logger.WithValues(
 		"namespace", req.Namespace,
 		"vpa", req.Name,
 		"controller", vpaGVK.Kind,
 	)
 
-	// Load the VPA; if missing, nothing to do.
+	// Load the VPA; if it no longer exists, nothing to do.
 	vpa, err := r.fetchExistingVPA(ctx, req.NamespacedName)
 	if err != nil {
 		metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "get").Inc()
@@ -87,18 +103,21 @@ func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	// Skip unmanaged VPAs (these are effectively user-owned VPAs).
+	// Ignore unmanaged (user-owned) VPAs entirely.
 	if r.skipUnmanaged(vpa) {
 		log.Info("managed label removed; skipping VPA reconciliation")
 		return ctrl.Result{}, nil
 	}
 
-	vpaName, vpaNamespace := vpa.GetName(), vpa.GetNamespace()
+	vpaName := vpa.GetName()
+	vpaNamespace := vpa.GetNamespace()
 
 	// Validate controller ownerRef.
 	gvk, ownerName, found := r.resolveOwnerGVK(vpa)
 	if !found {
+		// Managed VPA without controller owner → orphan.
 		log.Info("orphaned managed VPA has no controller owner")
+
 		r.Recorder.Eventf(
 			vpa,
 			corev1.EventTypeNormal,
@@ -117,20 +136,21 @@ func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	// Confirm the referenced owner object still exists.
+	// Verify that the referenced owner object still exists.
 	owner, err := r.fetchOwner(ctx, gvk, vpaNamespace, ownerName)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			// Error is not "not found" → return to retry.
+			// Transient API error → retry.
 			metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "fetch_owner").Inc()
 			return ctrl.Result{}, err
 		}
 
-		// Owner object really is gone → delete VPA.
+		// Owner object is gone → delete managed VPA.
 		log.Info("owner gone; deleting VPA",
 			"ownerKind", gvk.Kind,
 			"ownerName", ownerName,
 		)
+
 		r.Recorder.Eventf(
 			vpa,
 			corev1.EventTypeNormal,
@@ -149,32 +169,37 @@ func (r *VPAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	// Happy path -- the VPA is valid and managed.
+	// Happy path: managed VPA with valid controller owner.
 	log.Info("managed VPA has valid controller owner",
 		"ownerKind", gvk.Kind,
 		"ownerName", owner.GetName(),
 	)
+
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager configures this controller to watch VPAs with the managed label.
+// SetupWithManager wires the VPAReconciler into the controller manager.
 //
-// We filter events using ManagedVPALifecycle so the reconciler only receives
-// meaningful transitions (creation, deletion, or managed-label changes) and avoids
-// unnecessary noise.
+// The reconciler watches only VPAs and uses a structural predicate to ensure
+// it is triggered exclusively by meaningful lifecycle or ownership changes.
 func (r *VPAReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	vpa := newVPAObject()
 
 	return ctrl.NewControllerManagedBy(mgr).
-		// Primary resource.
+		// Primary resource: VPAs.
 		For(vpa).
-		// Only care about VPAs we mark as managed.
-		WithEventFilter(predicates.ManagedVPALifecycle(r.Meta.ManagedLabel)).
+		// Filter to structural transitions only.
+		WithEventFilter(
+			predicates.ManagedVPAStructuralLifecycle(r.Meta.ManagedLabel),
+		).
 		Complete(r)
 }
 
-// resolveOwnerGVK inspects controller ownerRefs and returns the GVK + name of
-// the owner workload. Only Deployment/StatefulSet/DaemonSet owners are supported.
+// resolveOwnerGVK extracts the controller ownerRef from a VPA and returns
+// its GroupVersionKind and name.
+//
+// Only controller ownerRefs for supported workload types are considered.
+// If no valid controller ownerRef is found, found=false is returned.
 func (r *VPAReconciler) resolveOwnerGVK(
 	vpa *unstructured.Unstructured,
 ) (gvk schema.GroupVersionKind, ownerName string, found bool) {
@@ -196,14 +221,21 @@ func (r *VPAReconciler) resolveOwnerGVK(
 	return schema.GroupVersionKind{}, "", false
 }
 
-// skipUnmanaged returns true if the VPA does *not* carry the operator's
-// managed label. Such VPAs are ignored; they are treated as user-managed.
-func (r *VPAReconciler) skipUnmanaged(vpa *unstructured.Unstructured) bool {
+// skipUnmanaged returns true if the VPA does not carry the operator’s
+// managed label with value "true".
+//
+// Such VPAs are treated as user-managed and ignored entirely.
+func (r *VPAReconciler) skipUnmanaged(
+	vpa *unstructured.Unstructured,
+) bool {
 	labels := vpa.GetLabels()
 	return labels[r.Meta.ManagedLabel] != "true"
 }
 
-// fetchOwner loads the controller owner object by its GroupVersionKind.
+// fetchOwner retrieves the controller owner object for a VPA.
+//
+// The GroupVersionKind determines the workload type.
+// A NotFound error indicates the owner has been deleted.
 func (r *VPAReconciler) fetchOwner(
 	ctx context.Context,
 	gvk schema.GroupVersionKind,
@@ -222,7 +254,9 @@ func (r *VPAReconciler) fetchOwner(
 	return owner, nil
 }
 
-// fetchExistingVPA loads a VPA or returns nil if it does not exist.
+// fetchExistingVPA loads a VPA by name/namespace.
+//
+// If the VPA does not exist, (nil, nil) is returned.
 func (r *VPAReconciler) fetchExistingVPA(
 	ctx context.Context,
 	key types.NamespacedName,
@@ -237,7 +271,9 @@ func (r *VPAReconciler) fetchExistingVPA(
 	return obj, nil
 }
 
-// deleteManagedVPA deletes a VPA, ignoring "not found" errors.
+// deleteManagedVPA deletes the given VPA.
+//
+// NotFound errors are ignored to make deletion idempotent.
 func (r *VPAReconciler) deleteManagedVPA(
 	ctx context.Context,
 	vpa client.Object,

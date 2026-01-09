@@ -79,7 +79,7 @@ If running in namespaced mode, ensure the associated `Role` and `RoleBinding` ar
 - `nameTemplate` is optional per profile; otherwise the global `--vpa-name-template` is used.
 - `updatePolicy.updateMode` must be a string (`Off`, `Auto`, `Initial`, etc.); boolean `true`/`false` is tolerated and normalized to `Auto`/`Off`.
 
-## Profile file example (config.yaml)
+## Profile file example (`config.yaml`)
 
 ```yaml
 ---
@@ -147,30 +147,33 @@ It will be rendered with the following variables:
 
 ## Managed vs. Manual VPA Behavior
 
-AutoVPA treats VPAs with the managed label (by default `autovpa.containeroo.ch/managed=true`) as its own and will try to keep them in sync with the workload.
+AutoVPA treats the **workload** (Deployment, StatefulSet, DaemonSet) as the single source of truth.
+
+Managed VPAs are continuously reconciled against the workload’s desired state. Any drift detected on a managed VPA (labels, spec, or ownership) may trigger reconciliation of the owning workload, which restores the expected configuration.
 
 ### If someone removes the managed label from a VPA
 
-- As long as the workload **still has** the profile annotation
-  (`autovpa.containeroo.ch/profile: <profile-name>`), AutoVPA will:
-  - Reconcile the workload again, and
-  - Re-add the managed label (and profile label) on the VPA to match its desired state.
+- If the workload **still has** the profile annotation:
+  - AutoVPA reconciles the workload
+  - Re-adds the managed label and profile label
+  - Restores the VPA spec
 
-- If the workload **no longer has** the profile annotation and the managed label is removed from the VPA:
-  - AutoVPA stops treating that VPA as managed and leaves it alone.
-  - It effectively becomes a **manual** VPA that you own.
+- If the workload **no longer has** the profile annotation:
+  - AutoVPA stops managing the VPA
+  - The VPA becomes manual and is left untouched
 
-### If someone changes the profile label on a VPA
+### If someone changes the profile label or spec on a VPA
 
-- AutoVPA always derives the desired profile from the **workload annotation**, not from the VPA.
-- If you change or remove `autovpa.containeroo.ch/profile` on the VPA:
-  - The next reconcile will reset the VPA's profile label (and spec) back to whatever the workload annotation says.
-  - Any manual changes to the VPA spec that conflict with the profile will be overwritten.
+- AutoVPA always derives the desired profile from the **workload annotation**.
+- Any manual changes to a **managed VPA** are treated as temporary:
+  - The next reconciliation restores labels and spec to match the workload.
 
-In short:
+- Changes to the VPA **status** are ignored and never trigger reconciliation.
 
-- Edit the **workload** to change behavior permanently.
-- Manual edits on **managed VPAs** are treated as temporary and will usually be corrected by the operator.
+**Rule of thumb**:
+
+- Edit the **workload** to make permanent changes.
+- Manual edits on **managed VPAs** will usually be reverted.
 
 ## Workload example
 

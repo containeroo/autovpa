@@ -41,7 +41,7 @@ var _ = Describe("Namespaced mode", Serial, Ordered, func() {
 		testutils.StartOperatorWithFlags([]string{
 			"--leader-elect=false",
 			"--metrics-enabled=false",
-			"--profile-annotation=" + profileAnnotation,
+			"--profile-annotation=" + profileKey,
 			"--managed-label=" + managedLabel,
 			"--vpa-name-template=" + VPANameTemplate,
 			"--config=" + configPath,
@@ -56,7 +56,7 @@ var _ = Describe("Namespaced mode", Serial, Ordered, func() {
 
 	It("Reconciles workloads within the watched namespace", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -71,7 +71,7 @@ var _ = Describe("Namespaced mode", Serial, Ordered, func() {
 	It("Skips workloads outside the watched namespace", func(ctx SpecContext) {
 		other := testutils.NSManager.CreateNamespace(ctx)
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, other, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, other, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),

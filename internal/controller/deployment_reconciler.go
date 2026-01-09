@@ -34,7 +34,7 @@ import (
 //
 // Its responsibilities are:
 //
-//   - Drive the *desired VPA state* for Deployments by delegating to
+//   - Drive the desired VPA state for Deployments by delegating to
 //     BaseReconciler.ReconcileWorkload.
 //   - Perform cleanup of managed VPAs when a Deployment is deleted.
 //
@@ -90,9 +90,11 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 }
 
 // SetupWithManager wires the Deployment controller into the manager.
+//
 //   - Deployment events are filtered by the profile annotation lifecycle.
-//   - Owned VPA events are not filtered by that annotation, so changes to a
-//     managed VPA still requeue the owning Deployment.
+//   - Owned VPA events are filtered by ManagedVPALifecycle, so spec/label drift
+//     requeues the owning Deployment ("snap back" behavior) while still ignoring
+//     status churn.
 func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	vpa := newVPAObject()
 
@@ -105,7 +107,7 @@ func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// We use a label-based predicate here so only VPAs with the managed label
 		// generate events for this controller.
 		Owns(vpa, builder.WithPredicates(
-			predicates.ManagedVPALifecycle(r.Meta.ManagedLabel),
+			predicates.ManagedVPALifecycle(r.Meta.ManagedLabel, r.Meta.ProfileKey),
 		)).
 		Complete(r)
 }

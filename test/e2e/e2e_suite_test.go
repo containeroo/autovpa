@@ -37,9 +37,9 @@ var (
 	testCfg    *rest.Config
 	testScheme = runtime.NewScheme()
 
-	profileAnnotation = "autovpa.containeroo.ch/profile"
-	managedLabel      = "autovpa.containeroo.ch/managed"
-	VPANameTemplate   = "{{ .WorkloadName }}-{{ .Profile }}-vpa"
+	profileKey      = "autovpa.containeroo.ch/profile"
+	managedLabel    = "autovpa.containeroo.ch/managed"
+	VPANameTemplate = "{{ .WorkloadName }}-{{ .Profile }}-vpa"
 )
 
 var (

@@ -42,7 +42,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 		testutils.StartOperatorWithFlags([]string{
 			"--leader-elect=false",
 			"--metrics-enabled=false",
-			"--profile-annotation=" + profileAnnotation,
+			"--profile-annotation=" + profileKey,
 			"--managed-label=" + managedLabel,
 			"--vpa-name-template=" + VPANameTemplate,
 			"--config=" + configPath,
@@ -64,7 +64,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Creates a VPA for a Deployment", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -78,7 +78,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Creates a VPA for a StatefulSet", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("sts")
-		sts := testutils.CreateStatefulSet(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		sts := testutils.CreateStatefulSet(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: sts.GetName(),
@@ -92,7 +92,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Creates a VPA for a DaemonSet", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("ds")
-		ds := testutils.CreateDaemonSet(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		ds := testutils.CreateDaemonSet(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: ds.GetName(),
@@ -106,7 +106,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Uses profile name template overrides", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "auto"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "auto"))
 
 		// The "auto" profile in the test config sets nameTemplate to "{{ .WorkloadName }}-vpa".
 		expectedName := dep.GetName() + "-vpa"
@@ -129,7 +129,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Deletes VPA when workload removes the profile annotation (opt-out)", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -141,7 +141,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 		By("Removing the profile annotation to opt out")
 		patch := client.MergeFrom(dep.DeepCopy())
-		delete(dep.Annotations, profileAnnotation)
+		delete(dep.Annotations, profileKey)
 		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
 
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
@@ -149,7 +149,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Leaves an unmanaged VPA alone after opt-out and managed-label removal", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -161,7 +161,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 		By("Opting out by removing the profile annotation")
 		patch := client.MergeFrom(dep.DeepCopy())
-		delete(dep.Annotations, profileAnnotation)
+		delete(dep.Annotations, profileKey)
 		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
 		testutils.ExpectVPANotFound(ctx, dep.GetNamespace(), vpaName)
 
@@ -192,7 +192,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Replaces VPA when name template changes", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -205,7 +205,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 		By("Changing the profile so the name template renders a different name")
 		patch := client.MergeFrom(dep.DeepCopy())
-		dep.Annotations[profileAnnotation] = "auto"
+		dep.Annotations[profileKey] = "auto"
 		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
 
 		By("Waiting for the new VPA is created and the old one to be gone")
@@ -222,7 +222,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Matches VPA spec to profile fields", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "auto"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "auto"))
 
 		// auto profile uses nameTemplate "{{ .WorkloadName }}-vpa"
 		vpaName := dep.GetName() + "-vpa"
@@ -254,7 +254,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Deployment restart does not trigger a VPA update", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -286,7 +286,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Delete statefulset removes VPA", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -317,7 +317,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Scaling deployment up does not trigger a VPA update", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -346,7 +346,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 	It("Unknown profile", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "unknown"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "unknown"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -398,7 +398,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 		// Set profile to trigger creation of a new VPA and cleanup of the obsolete one.
 		patch := client.MergeFrom(dep.DeepCopy())
-		dep.Annotations = map[string]string{profileAnnotation: "default"}
+		dep.Annotations = map[string]string{profileKey: "default"}
 		Expect(testutils.K8sClient.Patch(ctx, dep, patch)).To(Succeed())
 
 		expectedNewName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{

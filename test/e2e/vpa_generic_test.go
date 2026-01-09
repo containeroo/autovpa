@@ -44,7 +44,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 		testutils.StartOperatorWithFlags([]string{
 			"--leader-elect=false",
 			"--metrics-enabled=false",
-			"--profile-annotation=" + profileAnnotation,
+			"--profile-annotation=" + profileKey,
 			"--managed-label=" + managedLabel,
 			"--vpa-name-template=" + VPANameTemplate,
 			"--config=" + configPath,
@@ -106,7 +106,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 
 	It("Restores the managed label after manual removal when the workload has a profile", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -138,7 +138,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 
 	It("Restores the profile label after manual tampering when the workload has a profile", func(ctx SpecContext) {
 		name := testutils.GenerateUniqueName("dep")
-		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileAnnotation, "default"))
+		dep := testutils.CreateDeployment(ctx, ns, name, testutils.WithAnnotation(profileKey, "default"))
 
 		vpaName, _ := controller.RenderVPAName(VPANameTemplate, utils.NameTemplateData{
 			WorkloadName: dep.GetName(),
@@ -154,7 +154,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 		patch := client.MergeFrom(vpa.DeepCopy())
 		labels := vpa.GetLabels()
-		labels[profileAnnotation] = "tampered"
+		labels[profileKey] = "tampered"
 		vpa.SetLabels(labels)
 		Expect(testutils.K8sClient.Patch(ctx, vpa, patch)).To(Succeed())
 
@@ -162,7 +162,7 @@ var _ = Describe("VPA Generic", Serial, Ordered, func() {
 		Eventually(func(g Gomega) {
 			vpa, err := testutils.GetVPA(ctx, dep.GetNamespace(), vpaName)
 			g.Expect(err).ToNot(HaveOccurred())
-			g.Expect(vpa.GetLabels()).To(HaveKeyWithValue(profileAnnotation, "default"))
+			g.Expect(vpa.GetLabels()).To(HaveKeyWithValue(profileKey, "default"))
 		}).WithContext(ctx).Within(30 * time.Second).ProbeEvery(1 * time.Second).Should(Succeed())
 	})
 
