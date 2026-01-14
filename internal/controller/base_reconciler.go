@@ -50,9 +50,9 @@ type BaseReconciler struct {
 	KubeClient client.Client
 	Logger     *logr.Logger
 	Recorder   record.EventRecorder
+	Metrics    *metrics.Registry
 	Meta       MetaConfig
 	Profiles   ProfileConfig
-	Metrics    *metrics.Registry
 }
 
 const fieldManager = "autovpa"
@@ -151,7 +151,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 			ns,
 			name,
 			targetGVK.Kind,
-			vpaSkipReasonAnnotationMissing,
+			vpaSkipReasonProfileMissing,
 		)
 
 		// Do not return an error to avoid requeuing the workload.

@@ -133,7 +133,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				"namespace": "ns1",
 				"name":      "demo",
 				"kind":      "Deployment",
-				"reason":    "annotation_missing",
+				"reason":    vpaSkipReasonAnnotationMissing,
 			},
 		)
 		assert.Equal(t, float64(1), got)
@@ -188,7 +188,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				"namespace": "ns1",
 				"name":      "demo",
 				"kind":      "Deployment",
-				"reason":    "annotation_missing",
+				"reason":    vpaSkipReasonProfileMissing,
 			},
 		)
 		assert.Equal(t, float64(1), got)
@@ -491,7 +491,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				"namespace": "ns1",
 				"name":      "demo",
 				"kind":      "Deployment",
-				"reason":    "annotation_missing",
+				"reason":    vpaSkipReasonAnnotationMissing,
 			},
 		)
 		assert.Equal(t, float64(1), got)
