@@ -21,7 +21,9 @@ import (
 	"errors"
 	"testing"
 
+	internalmetrics "github.com/containeroo/autovpa/internal/metrics"
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,6 +49,9 @@ func TestDeploymentReconciler_SetupWithManager(t *testing.T) {
 	meta := MetaConfig{}
 	profiles := ProfileConfig{}
 
+	promReg := prometheus.NewRegistry()
+	metricsReg := internalmetrics.NewRegistry(promReg)
+
 	reconciler := &DeploymentReconciler{
 		BaseReconciler: BaseReconciler{
 			KubeClient: fakeClient,
@@ -54,6 +59,7 @@ func TestDeploymentReconciler_SetupWithManager(t *testing.T) {
 			Recorder:   record.NewFakeRecorder(10),
 			Meta:       meta,
 			Profiles:   profiles,
+			Metrics:    metricsReg,
 		},
 	}
 
@@ -70,6 +76,9 @@ func TestDeploymentReconciler_Reconcile(t *testing.T) {
 	t.Run("Deployment not found", func(t *testing.T) {
 		t.Parallel()
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		// Fake client with no resources
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 		reconciler := &DeploymentReconciler{
@@ -77,6 +86,7 @@ func TestDeploymentReconciler_Reconcile(t *testing.T) {
 				KubeClient: fakeClient,
 				Logger:     &logr.Logger{},
 				Recorder:   record.NewFakeRecorder(10),
+				Metrics:    metricsReg,
 			},
 		}
 
@@ -100,11 +110,15 @@ func TestDeploymentReconciler_Reconcile(t *testing.T) {
 			namespace: "test-namespace",
 		}
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		reconciler := (&DeploymentReconciler{
 			BaseReconciler: BaseReconciler{
 				KubeClient: fakeClient,
 				Logger:     &logr.Logger{},
 				Recorder:   record.NewFakeRecorder(10),
+				Metrics:    metricsReg,
 			},
 		})
 
@@ -136,11 +150,15 @@ func TestDeploymentReconciler_Reconcile(t *testing.T) {
 
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(deployment).Build()
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		reconciler := &DeploymentReconciler{
 			BaseReconciler: BaseReconciler{
 				KubeClient: fakeClient,
 				Logger:     &logr.Logger{},
 				Recorder:   record.NewFakeRecorder(10),
+				Metrics:    metricsReg,
 			},
 		}
 

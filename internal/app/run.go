@@ -28,6 +28,7 @@ import (
 	"github.com/containeroo/autovpa/internal/controller"
 	"github.com/containeroo/autovpa/internal/flag"
 	"github.com/containeroo/autovpa/internal/logging"
+	internalmetrics "github.com/containeroo/autovpa/internal/metrics"
 	"github.com/containeroo/autovpa/internal/utils"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +36,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -48,7 +50,6 @@ func init() {
 
 // Run is the main function of the application.
 func Run(ctx context.Context, version string, args []string, w io.Writer) error {
-	// Parse and validate command-line arguments
 	flags, err := flag.ParseArgs(args, version)
 	if err != nil {
 		if tinyflags.IsHelpRequested(err) || tinyflags.IsVersionRequested(err) {
@@ -58,7 +59,6 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		return fmt.Errorf("error parsing arguments: %w", err)
 	}
 
-	// Configure logging
 	logger, err := logging.InitLogging(flags, w)
 	if err != nil {
 		return fmt.Errorf("error setting up logger: %w", err)
@@ -67,7 +67,6 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 	setupLog := logger.WithName("setup")
 	setupLog.Info("initializing autovpa", "version", version)
 
-	// Load profiles
 	cfg, err := config.LoadFile(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to load profiles: %w", err)
@@ -80,7 +79,6 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		setupLog.Info("CLI Overrides", "overrides", flags.OverriddenValues)
 	}
 
-	// Log profiles
 	for name, profile := range cfg.Profiles {
 		setupLog.Info("loaded profile",
 			"name", name,
@@ -89,20 +87,17 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		)
 	}
 
-	// Profiles config
 	profilesCfg := controller.ProfileConfig{
 		Entries:      cfg.Profiles,
 		Default:      cfg.DefaultProfile,
 		NameTemplate: flags.DefaultNameTemplate,
 	}
 
-	// Metadata config
 	metaCfg := controller.MetaConfig{
 		ProfileKey:   flags.ProfileAnnotation,
 		ManagedLabel: flags.ManagedLabel,
 	}
 
-	// Validate annotation/label uniqueness
 	meta := map[string]string{
 		"Managed": flags.ManagedLabel,
 		"Profile": flags.ProfileAnnotation,
@@ -112,7 +107,6 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 	}
 	setupLog.Info("configured annotation/label keys", "values", utils.FormatKeys(meta))
 
-	// Configure HTTP/2 settings
 	tlsOpts := []func(*tls.Config){}
 	if !flags.EnableHTTP2 {
 		setupLog.Info("disabling HTTP/2 for compatibility")
@@ -121,13 +115,15 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		})
 	}
 
-	// Set up webhook server (no admission webhooks registered yet; add here if needed).
 	webhookServer := webhook.NewServer(webhook.Options{
 		TLSOpts: tlsOpts,
 	})
 
-	// Configure metrics server
-	metricsServerOptions := metricsserver.Options{BindAddress: "0"} // disable listener by default
+	metricsReg := internalmetrics.NewRegistry(crmetrics.Registry)
+
+	metricsServerOptions := metricsserver.Options{
+		BindAddress: "0", // disabled by default
+	}
 	if flags.EnableMetrics {
 		metricsServerOptions = metricsserver.Options{
 			BindAddress:   flags.MetricsAddr,
@@ -139,19 +135,19 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		}
 	}
 
-	// Create Cache Options
 	cacheOpts := utils.ToCacheOptions(flags.WatchNamespaces)
 
-	// Create and initialize the manager
 	restCfg, err := ctrl.GetConfig()
 	if err != nil {
 		return fmt.Errorf("unable to get Kubernetes REST config: %w", err)
 	}
+
 	if flags.CRDCheck {
 		if err := utils.EnsureVPAResource(restCfg); err != nil {
 			return err
 		}
 	}
+
 	mgr, err := ctrl.NewManager(restCfg, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -166,14 +162,12 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		return fmt.Errorf("unable to create manager: %w", err)
 	}
 
-	// Log watching namespaces
 	if len(flags.WatchNamespaces) == 0 {
 		setupLog.Info("namespace scope", "mode", "cluster-wide")
 	} else {
 		setupLog.Info("namespace scope", "mode", "namespaced", "namespaces", flags.WatchNamespaces)
 	}
 
-	// Setup Deployment controller
 	if err := (&controller.DeploymentReconciler{
 		BaseReconciler: controller.BaseReconciler{
 			Logger:     &logger,
@@ -181,12 +175,12 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Recorder:   mgr.GetEventRecorderFor("deployment-controller"),
 			Profiles:   profilesCfg,
 			Meta:       metaCfg,
+			Metrics:    metricsReg,
 		},
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create Deployment controller: %w", err)
 	}
 
-	// Setup StatefulSet controller
 	if err := (&controller.StatefulSetReconciler{
 		BaseReconciler: controller.BaseReconciler{
 			Logger:     &logger,
@@ -194,12 +188,12 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Recorder:   mgr.GetEventRecorderFor("statefulset-controller"),
 			Profiles:   profilesCfg,
 			Meta:       metaCfg,
+			Metrics:    metricsReg,
 		},
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create StatefulSet controller: %w", err)
 	}
 
-	// Setup DaemonSet controller
 	if err := (&controller.DaemonSetReconciler{
 		BaseReconciler: controller.BaseReconciler{
 			Logger:     &logger,
@@ -207,22 +201,22 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Recorder:   mgr.GetEventRecorderFor("daemonset-controller"),
 			Profiles:   profilesCfg,
 			Meta:       metaCfg,
+			Metrics:    metricsReg,
 		},
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create DaemonSet controller: %w", err)
 	}
 
-	// Setup VPA controller
 	if err := (&controller.VPAReconciler{
 		Logger:     &logger,
 		KubeClient: mgr.GetClient(),
 		Recorder:   mgr.GetEventRecorderFor("vpa-controller"),
 		Meta:       metaCfg,
+		Metrics:    metricsReg,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create VPA controller: %w", err)
 	}
 
-	// Register health and readiness checks
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return fmt.Errorf("failed to set up health check: %w", err)
 	}
@@ -230,7 +224,6 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		return fmt.Errorf("failed to set up ready check: %w", err)
 	}
 
-	// Start the manager
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("manager encountered an error while running: %w", err)

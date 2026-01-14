@@ -19,8 +19,10 @@ package controller
 import (
 	"testing"
 
+	internalmetrics "github.com/containeroo/autovpa/internal/metrics"
 	"github.com/containeroo/autovpa/test/testutils"
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,11 +47,15 @@ func TestDaemonSetReconciler_SetupWithManager(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
+	promReg := prometheus.NewRegistry()
+	metricsReg := internalmetrics.NewRegistry(promReg)
+
 	reconciler := &DaemonSetReconciler{
 		BaseReconciler: BaseReconciler{
 			KubeClient: fakeClient,
 			Logger:     &logr.Logger{},
 			Recorder:   record.NewFakeRecorder(10),
+			Metrics:    metricsReg,
 		},
 	}
 
@@ -66,13 +72,16 @@ func TestDaemonSetReconciler_Reconcile(t *testing.T) {
 	t.Run("DaemonSet not found", func(t *testing.T) {
 		t.Parallel()
 
-		// Fake client with no resources
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		reconciler := &DaemonSetReconciler{
 			BaseReconciler: BaseReconciler{
 				KubeClient: fakeClient,
 				Logger:     &logr.Logger{},
 				Recorder:   record.NewFakeRecorder(10),
+				Metrics:    metricsReg,
 			},
 		}
 
@@ -94,12 +103,15 @@ func TestDaemonSetReconciler_Reconcile(t *testing.T) {
 			Client:      fakeBaseClient,
 			GetErrorFor: testutils.NamedError{Name: "error-daemonset", Namespace: "test-namespace"},
 		}
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
 
 		reconciler := &DaemonSetReconciler{
 			BaseReconciler: BaseReconciler{
 				KubeClient: fakeClient,
 				Logger:     &logr.Logger{},
 				Recorder:   record.NewFakeRecorder(10),
+				Metrics:    metricsReg,
 			},
 		}
 
@@ -131,11 +143,15 @@ func TestDaemonSetReconciler_Reconcile(t *testing.T) {
 
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(daemonset).Build()
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		reconciler := &DaemonSetReconciler{
 			BaseReconciler: BaseReconciler{
 				KubeClient: fakeClient,
 				Logger:     &logr.Logger{},
 				Recorder:   record.NewFakeRecorder(10),
+				Metrics:    metricsReg,
 			},
 		}
 

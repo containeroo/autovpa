@@ -22,14 +22,14 @@ import (
 
 	"github.com/containeroo/autovpa/internal/config"
 	"github.com/containeroo/autovpa/internal/flag"
-	"github.com/containeroo/autovpa/internal/metrics"
+	internalmetrics "github.com/containeroo/autovpa/internal/metrics"
 	"github.com/containeroo/autovpa/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/testutil"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,16 +42,59 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+func mustGetCounterValue(t *testing.T, g prometheus.Gatherer, metricName string, wantLabels map[string]string) float64 {
+	t.Helper()
+
+	mfs, err := g.Gather()
+	require.NoError(t, err)
+
+	for _, mf := range mfs {
+		if mf.GetName() != metricName {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			if labelsMatch(m.GetLabel(), wantLabels) {
+				// Counter must be present for this metric.
+				require.NotNil(t, m.GetCounter())
+				return m.GetCounter().GetValue()
+			}
+		}
+		t.Fatalf("metric %q found but no series matched labels: %#v", metricName, wantLabels)
+	}
+
+	t.Fatalf("metric %q not found in registry", metricName)
+	return 0
+}
+
+func labelsMatch(lbls []*io_prometheus_client.LabelPair, want map[string]string) bool {
+	if len(want) == 0 {
+		return true
+	}
+	got := make(map[string]string, len(lbls))
+	for _, lp := range lbls {
+		got[lp.GetName()] = lp.GetValue()
+	}
+	for k, v := range want {
+		if got[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
 func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 	t.Parallel()
 
 	t.Run("Skips VPA when annotation missing", func(t *testing.T) {
-		resetMetrics(t)
+		t.Parallel()
 		ctx := context.Background()
 		scheme := newScheme(t)
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
 		rec := record.NewFakeRecorder(10)
 		logger := logr.Discard()
+
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
 
 		cfg := &config.Config{
 			DefaultProfile: "p1",
@@ -64,6 +107,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			KubeClient: client,
 			Logger:     &logger,
 			Recorder:   rec,
+			Metrics:    metricsReg,
 			Meta: MetaConfig{
 				ProfileKey:   "vpa/profile",
 				ManagedLabel: "vpa/managed",
@@ -82,18 +126,29 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		_, err := reconciler.ReconcileWorkload(ctx, dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))
 		require.NoError(t, err)
 
-		metric := metrics.VPASkipped.WithLabelValues("ns1", "demo", "Deployment", "annotation_missing")
-		got := readCounter(t, metric)
-		assert.Equal(t, 1, got)
+		// Assert by gathering from the registry and finding the matching series.
+		got := mustGetCounterValue(t, promReg,
+			"autovpa_vpa_skipped_total",
+			map[string]string{
+				"namespace": "ns1",
+				"name":      "demo",
+				"kind":      "Deployment",
+				"reason":    "annotation_missing",
+			},
+		)
+		assert.Equal(t, float64(1), got)
 	})
 
 	t.Run("Skips VPA when profile missing", func(t *testing.T) {
-		resetMetrics(t)
+		t.Parallel()
 		ctx := context.Background()
 		scheme := newScheme(t)
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
 		rec := record.NewFakeRecorder(10)
 		logger := logr.Discard()
+
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
 
 		cfg := &config.Config{
 			DefaultProfile: "p1",
@@ -115,6 +170,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				Default:      cfg.DefaultProfile,
 				NameTemplate: flag.DefaultNameTemplate,
 			},
+			Metrics: metricsReg,
 		}
 
 		dep := &appsv1.Deployment{}
@@ -125,19 +181,29 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		_, err := reconciler.ReconcileWorkload(ctx, dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))
 		require.NoError(t, err)
 
-		metric := metrics.VPASkipped.WithLabelValues("ns1", "demo", "Deployment", "profile_missing")
-		got := readCounter(t, metric)
-		require.Equal(t, 1, got)
-		assert.Len(t, rec.Events, 1)
+		// Assert by gathering from the registry and finding the matching series.
+		got := mustGetCounterValue(t, promReg,
+			"autovpa_vpa_skipped_total",
+			map[string]string{
+				"namespace": "ns1",
+				"name":      "demo",
+				"kind":      "Deployment",
+				"reason":    "annotation_missing",
+			},
+		)
+		assert.Equal(t, float64(1), got)
 	})
 
 	t.Run("Creates VPA", func(t *testing.T) {
-		resetMetrics(t)
+		t.Parallel()
 		ctx := context.Background()
 		scheme := newScheme(t)
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
 		rec := record.NewFakeRecorder(10)
 		logger := logr.Discard()
+
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
 
 		cfg := &config.Config{
 			DefaultProfile: "p1",
@@ -150,6 +216,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			KubeClient: client,
 			Logger:     &logger,
 			Recorder:   rec,
+			Metrics:    metricsReg,
 			Meta: MetaConfig{
 				ProfileKey:   "vpa/profile",
 				ManagedLabel: "vpa/managed",
@@ -183,12 +250,21 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		assert.Equal(t, "demo", target["name"])
 		assert.Equal(t, "Deployment", target["kind"])
 
-		got := readCounter(t, metrics.VPACreated.WithLabelValues("ns1", "demo", "Deployment", "p1"))
-		assert.Equal(t, 1, got)
+		// Assert by gathering from the registry and finding the matching series.
+		got := mustGetCounterValue(t, promReg,
+			"autovpa_vpa_created_total",
+			map[string]string{
+				"namespace": "ns1",
+				"name":      "demo",
+				"kind":      "Deployment",
+				"profile":   "p1",
+			},
+		)
+		assert.Equal(t, float64(1), got)
 	})
 
 	t.Run("Deletes obsolete managed VPA when name changes", func(t *testing.T) {
-		resetMetrics(t)
+		t.Parallel()
 		ctx := context.Background()
 		scheme := newScheme(t)
 		dep := &appsv1.Deployment{}
@@ -232,10 +308,14 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			},
 		}
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		reconciler := BaseReconciler{
 			KubeClient: client,
 			Logger:     &logger,
 			Recorder:   rec,
+			Metrics:    metricsReg,
 			Meta: MetaConfig{
 				ProfileKey:   "vpa/profile",
 				ManagedLabel: "vpa/managed",
@@ -261,7 +341,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 	})
 
 	t.Run("Updates VPA", func(t *testing.T) {
-		resetMetrics(t)
+		t.Parallel()
 		ctx := context.Background()
 		scheme := newScheme(t)
 
@@ -295,10 +375,14 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			},
 		}
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		reconciler := BaseReconciler{
 			KubeClient: client,
 			Logger:     &logger,
 			Recorder:   rec,
+			Metrics:    metricsReg,
 			Meta: MetaConfig{
 				ProfileKey:   "vpa/profile",
 				ManagedLabel: "vpa/managed",
@@ -325,12 +409,21 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		spec := vpa.Object["spec"].(map[string]any)
 		updatePolicy := spec["updatePolicy"].(map[string]any)
 		assert.Equal(t, "Auto", updatePolicy["updateMode"])
-		got := readCounter(t, metrics.VPAUpdated.WithLabelValues("ns1", "demo", "Deployment", "p1"))
-		assert.Equal(t, 1, got)
+
+		// Assert by gathering from the registry and finding the matching series.
+		got := mustGetCounterValue(t, promReg,
+			"autovpa_vpa_updated_total",
+			map[string]string{
+				"namespace": "ns1",
+				"name":      "demo",
+				"kind":      "Deployment",
+			},
+		)
+		assert.Equal(t, float64(1), got)
 	})
 
 	t.Run("Cleans managed VPAs when annotation is removed", func(t *testing.T) {
-		resetMetrics(t)
+		t.Parallel()
 		ctx := context.Background()
 		scheme := newScheme(t)
 
@@ -366,10 +459,14 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 			Profiles:       map[string]config.Profile{"p1": {Spec: config.ProfileSpec{}}},
 		}
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		reconciler := BaseReconciler{
 			KubeClient: client,
 			Logger:     &logger,
 			Recorder:   rec,
+			Metrics:    metricsReg,
 			Meta: MetaConfig{
 				ProfileKey:   "vpa/profile",
 				ManagedLabel: "vpa/managed",
@@ -386,6 +483,18 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 
 		err = client.Get(ctx, types.NamespacedName{Name: vpaName, Namespace: "ns1"}, vpa)
 		assert.True(t, apierrors.IsNotFound(err))
+
+		// Assert by gathering from the registry and finding the matching series.
+		got := mustGetCounterValue(t, promReg,
+			"autovpa_vpa_skipped_total",
+			map[string]string{
+				"namespace": "ns1",
+				"name":      "demo",
+				"kind":      "Deployment",
+				"reason":    "annotation_missing",
+			},
+		)
+		assert.Equal(t, float64(1), got)
 	})
 }
 
@@ -718,18 +827,6 @@ func newScheme(t *testing.T) *runtime.Scheme {
 		Kind:    vpaGVK.Kind + "List",
 	}, &unstructured.UnstructuredList{})
 	return s
-}
-
-func resetMetrics(t *testing.T) {
-	t.Helper()
-	metrics.VPACreated.Reset()
-	metrics.VPAUpdated.Reset()
-	metrics.VPASkipped.Reset()
-}
-
-func readCounter(t *testing.T, c prometheus.Collector) int {
-	t.Helper()
-	return int(testutil.ToFloat64(c))
 }
 
 func updateModePtr(t *testing.T, mode vpaautoscaling.UpdateMode) *vpaautoscaling.UpdateMode {

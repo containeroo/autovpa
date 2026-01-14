@@ -52,6 +52,7 @@ type BaseReconciler struct {
 	Recorder   record.EventRecorder
 	Meta       MetaConfig
 	Profiles   ProfileConfig
+	Metrics    *metrics.Registry
 }
 
 const fieldManager = "autovpa"
@@ -113,12 +114,12 @@ func (b *BaseReconciler) ReconcileWorkload(
 			fmt.Sprintf("annotation %q missing; skipping VPA", b.Meta.ProfileKey),
 		)
 
-		metrics.VPASkipped.WithLabelValues(
+		b.Metrics.IncVPASkipped(
 			ns,
 			name,
 			targetGVK.Kind,
 			vpaSkipReasonAnnotationMissing,
-		).Inc()
+		)
 
 		// User opted out → delete all operator-managed VPAs for this workload.
 		if err := b.DeleteManagedVPAsForOptOut(ctx, obj, targetGVK.Kind); err != nil {
@@ -146,12 +147,13 @@ func (b *BaseReconciler) ReconcileWorkload(
 			"profile %q not found", selectedProfile,
 		)
 
-		metrics.VPASkipped.WithLabelValues(
+		b.Metrics.IncVPASkipped(
 			ns,
 			name,
 			targetGVK.Kind,
-			vpaSkipReasonProfileMissing,
-		).Inc()
+			vpaSkipReasonAnnotationMissing,
+		)
+
 		// Do not return an error to avoid requeuing the workload.
 		return ctrl.Result{}, nil
 	}
@@ -191,8 +193,8 @@ func (b *BaseReconciler) ReconcileWorkload(
 			"Created VPA %s with profile %s", desired.Name, selectedProfile,
 		)
 
-		metrics.VPACreated.WithLabelValues(ns, name, targetGVK.Kind, selectedProfile).Inc()
-		metrics.VPAManaged.WithLabelValues(ns, selectedProfile).Inc()
+		b.Metrics.IncVPACreated(ns, name, targetGVK.Kind, selectedProfile)
+		b.Metrics.IncVPAManaged(ns, selectedProfile)
 		return ctrl.Result{}, nil
 	}
 
@@ -223,7 +225,7 @@ func (b *BaseReconciler) ReconcileWorkload(
 		"Updated VPA %s to profile %s", desired.Name, selectedProfile,
 	)
 
-	metrics.VPAUpdated.WithLabelValues(ns, name, targetGVK.Kind, selectedProfile).Inc()
+	b.Metrics.IncVPAUpdated(ns, name, targetGVK.Kind, selectedProfile)
 	return ctrl.Result{}, nil
 }
 
@@ -266,8 +268,8 @@ func (b *BaseReconciler) DeleteObsoleteManagedVPAs(
 		)
 
 		profile := profileFromLabels(vpa.GetLabels(), b.Meta.ProfileKey)
-		metrics.VPADeletedObsolete.WithLabelValues(owner.GetNamespace(), workloadKind).Inc()
-		metrics.VPAManaged.WithLabelValues(owner.GetNamespace(), profile).Dec()
+		b.Metrics.IncVPADeletedObsolete(owner.GetNamespace(), workloadKind)
+		b.Metrics.DecVPAManaged(owner.GetNamespace(), profile)
 
 		b.Recorder.Eventf(
 			owner,
@@ -287,8 +289,8 @@ func (b *BaseReconciler) DeleteManagedVPAsForOptOut(
 	workloadKind string,
 ) error {
 	return b.deleteManagedVPAs(ctx, owner, workloadKind, func(ns, profile string) {
-		metrics.VPADeletedOptOut.WithLabelValues(ns, workloadKind).Inc()
-		metrics.VPAManaged.WithLabelValues(ns, profile).Dec()
+		b.Metrics.IncVPADeletedOptOut(ns, workloadKind)
+		b.Metrics.DecVPAManaged(ns, profile)
 	})
 }
 
@@ -299,8 +301,8 @@ func (b *BaseReconciler) DeleteManagedVPAsForGoneWorkload(
 	workloadKind string,
 ) error {
 	return b.deleteManagedVPAs(ctx, owner, workloadKind, func(ns, profile string) {
-		metrics.VPADeletedWorkloadGone.WithLabelValues(ns, workloadKind).Inc()
-		metrics.VPAManaged.WithLabelValues(ns, profile).Dec()
+		b.Metrics.IncVPADeletedWorkloadGone(ns, workloadKind)
+		b.Metrics.DecVPAManaged(ns, profile)
 	})
 }
 

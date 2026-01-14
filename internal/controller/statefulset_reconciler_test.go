@@ -19,8 +19,10 @@ package controller
 import (
 	"testing"
 
+	internalmetrics "github.com/containeroo/autovpa/internal/metrics"
 	"github.com/containeroo/autovpa/test/testutils"
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,8 +45,12 @@ func TestStatefulSetReconciler_SetupWithManager(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
+	promReg := prometheus.NewRegistry()
+	metricsReg := internalmetrics.NewRegistry(promReg)
+
 	reconciler := &StatefulSetReconciler{
 		BaseReconciler: BaseReconciler{
+			Metrics:    metricsReg,
 			KubeClient: fakeClient,
 			Logger:     &logr.Logger{},
 			Recorder:   record.NewFakeRecorder(10),
@@ -64,9 +70,13 @@ func TestStatefulSetReconciler_Reconcile(t *testing.T) {
 	t.Run("StatefulSet not found", func(t *testing.T) {
 		t.Parallel()
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 		reconciler := &StatefulSetReconciler{
 			BaseReconciler: BaseReconciler{
+				Metrics:    metricsReg,
 				KubeClient: fakeClient,
 				Logger:     &logr.Logger{},
 				Recorder:   record.NewFakeRecorder(10),
@@ -92,8 +102,12 @@ func TestStatefulSetReconciler_Reconcile(t *testing.T) {
 			GetErrorFor: testutils.NamedError{Name: "error-statefulset", Namespace: "test-namespace"},
 		}
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		reconciler := &StatefulSetReconciler{
 			BaseReconciler: BaseReconciler{
+				Metrics:    metricsReg,
 				KubeClient: fakeClient,
 				Logger:     &logr.Logger{},
 				Recorder:   record.NewFakeRecorder(10),
@@ -127,11 +141,15 @@ func TestStatefulSetReconciler_Reconcile(t *testing.T) {
 
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(statefulset).Build()
 
+		promReg := prometheus.NewRegistry()
+		metricsReg := internalmetrics.NewRegistry(promReg)
+
 		reconciler := &StatefulSetReconciler{
 			BaseReconciler: BaseReconciler{
 				KubeClient: fakeClient,
 				Logger:     &logr.Logger{},
 				Recorder:   record.NewFakeRecorder(10),
+				Metrics:    metricsReg,
 			},
 		}
 
