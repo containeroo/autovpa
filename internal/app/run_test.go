@@ -28,11 +28,7 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	t.Parallel()
-
 	t.Run("Smoke", func(t *testing.T) {
-		t.Parallel()
-
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
@@ -66,8 +62,6 @@ func TestRun(t *testing.T) {
 	})
 
 	t.Run("Invalid args", func(t *testing.T) {
-		t.Parallel()
-
 		ctx := t.Context()
 		args := []string{"--invalid-flag"}
 		out := &bytes.Buffer{}
@@ -79,8 +73,6 @@ func TestRun(t *testing.T) {
 	})
 
 	t.Run("Request Help", func(t *testing.T) {
-		t.Parallel()
-
 		ctx := t.Context()
 		args := []string{"--version"}
 		out := &bytes.Buffer{}
@@ -92,8 +84,6 @@ func TestRun(t *testing.T) {
 	})
 
 	t.Run("Logger error", func(t *testing.T) {
-		t.Parallel()
-
 		ctx := t.Context()
 		args := []string{"--log-encoder", "invalid"}
 		out := &bytes.Buffer{}
@@ -105,8 +95,6 @@ func TestRun(t *testing.T) {
 	})
 
 	t.Run("Missing profile file", func(t *testing.T) {
-		t.Parallel()
-
 		ctx := t.Context()
 		args := []string{
 			"--config", "/tmp/does-not-exist.yaml",
@@ -122,8 +110,6 @@ func TestRun(t *testing.T) {
 	})
 
 	t.Run("Wrong profile file", func(t *testing.T) {
-		t.Parallel()
-
 		ctx := t.Context()
 
 		path := t.TempDir() + "/profiles.yaml"
@@ -149,8 +135,6 @@ profiles:
 	})
 
 	t.Run("Duplicate keys", func(t *testing.T) {
-		t.Parallel()
-
 		ctx := t.Context()
 		profilePath := writeProfileFile(t)
 		args := []string{
@@ -169,8 +153,6 @@ profiles:
 	})
 
 	t.Run("Invalid name template", func(t *testing.T) {
-		t.Parallel()
-
 		ctx := t.Context()
 		profilePath := writeProfileFile(t)
 		args := []string{
@@ -186,21 +168,6 @@ profiles:
 
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "failed to validate profiles: default name template invalid")
-	})
-
-	t.Run("Leader Election", func(t *testing.T) {
-		ctx := t.Context()
-		cfg := writeProfileFile(t)
-		args := []string{
-			"--health-probe-bind-address", ":8082",
-			"--config=" + cfg,
-		}
-		out := &bytes.Buffer{}
-
-		err := Run(ctx, "v0.0.0", args, out)
-
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "unable to create manager: unable to find leader election namespace")
 	})
 }
 

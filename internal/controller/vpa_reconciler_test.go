@@ -20,7 +20,9 @@ import (
 	"context"
 	"testing"
 
+	internalmetrics "github.com/containeroo/autovpa/internal/metrics"
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -379,10 +381,14 @@ func newTestVPAReconciler(t *testing.T, objs ...client.Object) *VPAReconciler {
 
 	logger := logr.Discard()
 
+	promReg := prometheus.NewRegistry()
+	metricsReg := internalmetrics.NewRegistry(promReg)
+
 	return &VPAReconciler{
 		KubeClient: c,
 		Logger:     &logger,
 		Recorder:   record.NewFakeRecorder(32),
+		Metrics:    metricsReg,
 		Meta: MetaConfig{
 			ProfileKey:   profileKey,
 			ManagedLabel: managedLabelKey,

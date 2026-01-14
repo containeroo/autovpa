@@ -59,6 +59,9 @@ type VPAReconciler struct {
 
 	// Meta contains operator metadata such as label keys.
 	Meta MetaConfig
+
+	// Metrics holds the Metrics
+	Metrics *metrics.Registry
 }
 
 // Kubernetes event reasons emitted by the VPAReconciler.
@@ -95,7 +98,7 @@ func (r *VPAReconciler) Reconcile(
 	// Load the VPA; if it no longer exists, nothing to do.
 	vpa, err := r.fetchExistingVPA(ctx, req.NamespacedName)
 	if err != nil {
-		metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "get").Inc()
+		r.Metrics.IncReconcileErrors("vpa", vpaGVK.Kind, "get")
 		return ctrl.Result{}, err
 	}
 	if vpa == nil {
@@ -126,13 +129,13 @@ func (r *VPAReconciler) Reconcile(
 		)
 
 		if err := r.deleteManagedVPA(ctx, vpa); err != nil {
-			metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "delete").Inc()
+			r.Metrics.IncReconcileErrors("vpa", vpaGVK.Kind, "delete")
 			return ctrl.Result{}, err
 		}
 
 		profile := profileFromLabels(vpa.GetLabels(), r.Meta.ProfileKey)
-		metrics.VPADeletedOrphaned.WithLabelValues(vpaNamespace).Inc()
-		metrics.VPAManaged.WithLabelValues(vpaNamespace, profile).Dec()
+		r.Metrics.IncVPADeletedOrphaned(vpaNamespace)
+		r.Metrics.DecVPAManaged(vpaNamespace, profile)
 		return ctrl.Result{}, nil
 	}
 
@@ -141,7 +144,7 @@ func (r *VPAReconciler) Reconcile(
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			// Transient API error → retry.
-			metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "fetch_owner").Inc()
+			r.Metrics.IncReconcileErrors("vpa", vpaGVK.Kind, "fetch_owner")
 			return ctrl.Result{}, err
 		}
 
@@ -159,13 +162,13 @@ func (r *VPAReconciler) Reconcile(
 		)
 
 		if err := r.deleteManagedVPA(ctx, vpa); err != nil {
-			metrics.ReconcileErrors.WithLabelValues("vpa", vpaGVK.Kind, "delete").Inc()
+			r.Metrics.IncReconcileErrors("vpa", vpaGVK.Kind, "delete")
 			return ctrl.Result{}, err
 		}
 
 		profile := profileFromLabels(vpa.GetLabels(), r.Meta.ProfileKey)
-		metrics.VPADeletedOwnerGone.WithLabelValues(vpaNamespace, gvk.Kind).Inc()
-		metrics.VPAManaged.WithLabelValues(vpaNamespace, profile).Dec()
+		r.Metrics.IncVPADeletedOwnerGone(vpaNamespace, gvk.Kind)
+		r.Metrics.DecVPAManaged(vpaNamespace, profile)
 		return ctrl.Result{}, nil
 	}
 
