@@ -51,18 +51,20 @@ func init() {
 // Run is the main function of the application.
 func Run(ctx context.Context, version string, args []string, w io.Writer) error {
 	flags, err := flag.ParseArgs(args, version)
+	logger, lErr := logging.InitLogging(flags, w)
+	setupLog := logger.WithName("setup")
+	setupLog.Info("initializing autovpa", "version", version)
+
 	if err != nil {
 		if tinyflags.IsHelpRequested(err) || tinyflags.IsVersionRequested(err) {
 			_, _ = fmt.Fprint(w, err.Error())
 			return nil
 		}
+		setupLog.Error(err, "failed to parse flags")
 		return err
 	}
 
 	// Setup logger immediately so startup errors are correctly logged.
-	logger, lErr := logging.InitLogging(flags, w)
-	setupLog := logger.WithName("setup")
-	setupLog.Info("initializing autovpa", "version", version)
 	if lErr != nil {
 		setupLog.Error(lErr, "error setting up logger")
 		return err
