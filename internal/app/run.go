@@ -53,26 +53,29 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 	flags, err := flag.ParseArgs(args, version)
 	if err != nil {
 		if tinyflags.IsHelpRequested(err) || tinyflags.IsVersionRequested(err) {
-			fmt.Fprint(w, err.Error()) // nolint:errcheck
+			_, _ = fmt.Fprint(w, err.Error())
 			return nil
 		}
-		return fmt.Errorf("error parsing arguments: %w", err)
+		return err
 	}
 
-	logger, err := logging.InitLogging(flags, w)
-	if err != nil {
-		return fmt.Errorf("error setting up logger: %w", err)
-	}
-
+	// Setup logger immediately so startup errors are correctly logged.
+	logger, lErr := logging.InitLogging(flags, w)
 	setupLog := logger.WithName("setup")
 	setupLog.Info("initializing autovpa", "version", version)
+	if lErr != nil {
+		logger.Error(lErr, "error setting up logger")
+		return err
+	}
 
 	cfg, err := config.LoadFile(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("failed to load profiles: %w", err)
+		logger.Error(err, "failed to load profiles")
+		return err
 	}
 	if err := cfg.Validate(flags.DefaultNameTemplate); err != nil {
-		return fmt.Errorf("failed to validate profiles: %w", err)
+		logger.Error(err, "failed to validate profiles")
+		return err
 	}
 
 	if len(flags.OverriddenValues) > 0 {
@@ -103,7 +106,8 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		"Profile": flags.ProfileAnnotation,
 	}
 	if err := utils.ValidateUniqueKeys(meta); err != nil {
-		return fmt.Errorf("annotation/label keys must be unique: %w", err)
+		logger.Error(err, "annotation/label keys must be unique")
+		return err
 	}
 	setupLog.Info("configured annotation/label keys", "values", utils.FormatKeys(meta))
 
@@ -139,11 +143,13 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 
 	restCfg, err := ctrl.GetConfig()
 	if err != nil {
-		return fmt.Errorf("unable to get Kubernetes REST config: %w", err)
+		logger.Error(err, "unable to get Kubernetes REST config")
+		return err
 	}
 
 	if flags.CRDCheck {
 		if err := utils.EnsureVPAResource(restCfg); err != nil {
+			logger.Error(err, "failed to ensure VPA CRD")
 			return err
 		}
 	}
@@ -159,7 +165,8 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		Cache:                  cacheOpts,
 	})
 	if err != nil {
-		return fmt.Errorf("unable to create manager: %w", err)
+		logger.Error(err, "unable to create manager")
+		return err
 	}
 
 	if len(flags.WatchNamespaces) == 0 {
@@ -178,7 +185,8 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Metrics:    metricsReg,
 		},
 	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create Deployment controller: %w", err)
+		logger.Error(err, "unable to create Deployment controller")
+		return err
 	}
 
 	if err := (&controller.StatefulSetReconciler{
@@ -191,7 +199,8 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Metrics:    metricsReg,
 		},
 	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create StatefulSet controller: %w", err)
+		logger.Error(err, "unable to create StatefulSet controller")
+		return err
 	}
 
 	if err := (&controller.DaemonSetReconciler{
@@ -204,7 +213,8 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Metrics:    metricsReg,
 		},
 	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create DaemonSet controller: %w", err)
+		logger.Error(err, "unable to create DaemonSet controller")
+		return err
 	}
 
 	if err := (&controller.VPAReconciler{
@@ -214,19 +224,23 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		Meta:       metaCfg,
 		Metrics:    metricsReg,
 	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create VPA controller: %w", err)
+		logger.Error(err, "unable to create VPA controller")
+		return err
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		return fmt.Errorf("failed to set up health check: %w", err)
+		logger.Error(err, "failed to set up health check")
+		return err
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		return fmt.Errorf("failed to set up ready check: %w", err)
+		logger.Error(err, "failed to set up ready check")
+		return err
 	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
-		return fmt.Errorf("manager encountered an error while running: %w", err)
+		logger.Error(err, "manager encountered an error while running")
+		return err
 	}
 
 	return nil

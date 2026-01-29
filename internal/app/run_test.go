@@ -69,10 +69,10 @@ func TestRun(t *testing.T) {
 		err := Run(ctx, "v0.0.0", args, out)
 
 		require.Error(t, err)
-		assert.EqualError(t, err, "error parsing arguments: unknown flag: --invalid-flag")
+		assert.EqualError(t, err, "unknown flag: --invalid-flag")
 	})
 
-	t.Run("Request Help", func(t *testing.T) {
+	t.Run("Request version", func(t *testing.T) {
 		ctx := t.Context()
 		args := []string{"--version"}
 		out := &bytes.Buffer{}
@@ -91,7 +91,7 @@ func TestRun(t *testing.T) {
 		err := Run(ctx, "v0.0.0", args, out)
 
 		require.Error(t, err)
-		assert.EqualError(t, err, "error parsing arguments: invalid value for flag --log-encoder: must be one of: json, console.")
+		assert.EqualError(t, err, "invalid value for flag --log-encoder: must be one of: json, console.")
 	})
 
 	t.Run("Missing profile file", func(t *testing.T) {
@@ -106,7 +106,7 @@ func TestRun(t *testing.T) {
 		err := Run(ctx, "v0.0.0", args, out)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed to load profiles: read profiles file")
+		assert.EqualError(t, err, "read profiles file \"/tmp/does-not-exist.yaml\": open /tmp/does-not-exist.yaml: no such file or directory")
 	})
 
 	t.Run("Wrong profile file", func(t *testing.T) {
@@ -131,7 +131,7 @@ profiles:
 		err = Run(ctx, "v0.0.0", args, out)
 
 		require.Error(t, err)
-		assert.EqualError(t, err, "failed to validate profiles: profiles must be set")
+		assert.EqualError(t, err, "profiles must be set")
 	})
 
 	t.Run("Duplicate keys", func(t *testing.T) {
@@ -149,7 +149,7 @@ profiles:
 		err := Run(ctx, "v0.0.0", args, out)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "keys must be unique: duplicate key value")
+		assert.EqualError(t, err, "duplicate key value \"dup\" found for keys \"Managed\" and \"Profile\"")
 	})
 
 	t.Run("Invalid name template", func(t *testing.T) {
@@ -167,7 +167,7 @@ profiles:
 		err := Run(ctx, "v0.0.0", args, out)
 
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed to validate profiles: default name template invalid")
+		assert.EqualError(t, err, "default name template invalid: parse template: template: name:1: unclosed action")
 	})
 }
 
