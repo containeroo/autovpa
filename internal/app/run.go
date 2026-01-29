@@ -64,17 +64,17 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 	setupLog := logger.WithName("setup")
 	setupLog.Info("initializing autovpa", "version", version)
 	if lErr != nil {
-		logger.Error(lErr, "error setting up logger")
+		setupLog.Error(lErr, "error setting up logger")
 		return err
 	}
 
 	cfg, err := config.LoadFile(flags.ConfigPath)
 	if err != nil {
-		logger.Error(err, "failed to load profiles")
+		setupLog.Error(err, "failed to load profiles")
 		return err
 	}
 	if err := cfg.Validate(flags.DefaultNameTemplate); err != nil {
-		logger.Error(err, "failed to validate profiles")
+		setupLog.Error(err, "failed to validate profiles")
 		return err
 	}
 
@@ -106,7 +106,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		"Profile": flags.ProfileAnnotation,
 	}
 	if err := utils.ValidateUniqueKeys(meta); err != nil {
-		logger.Error(err, "annotation/label keys must be unique")
+		setupLog.Error(err, "annotation/label keys must be unique")
 		return err
 	}
 	setupLog.Info("configured annotation/label keys", "values", utils.FormatKeys(meta))
@@ -143,13 +143,13 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 
 	restCfg, err := ctrl.GetConfig()
 	if err != nil {
-		logger.Error(err, "unable to get Kubernetes REST config")
+		setupLog.Error(err, "unable to get Kubernetes REST config")
 		return err
 	}
 
 	if flags.CRDCheck {
 		if err := utils.EnsureVPAResource(restCfg); err != nil {
-			logger.Error(err, "failed to ensure VPA CRD")
+			setupLog.Error(err, "failed to ensure VPA CRD")
 			return err
 		}
 	}
@@ -165,7 +165,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		Cache:                  cacheOpts,
 	})
 	if err != nil {
-		logger.Error(err, "unable to create manager")
+		setupLog.Error(err, "unable to create manager")
 		return err
 	}
 
@@ -185,7 +185,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Metrics:    metricsReg,
 		},
 	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create Deployment controller")
+		setupLog.Error(err, "unable to create Deployment controller")
 		return err
 	}
 
@@ -199,7 +199,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Metrics:    metricsReg,
 		},
 	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create StatefulSet controller")
+		setupLog.Error(err, "unable to create StatefulSet controller")
 		return err
 	}
 
@@ -213,7 +213,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 			Metrics:    metricsReg,
 		},
 	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create DaemonSet controller")
+		setupLog.Error(err, "unable to create DaemonSet controller")
 		return err
 	}
 
@@ -224,22 +224,22 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		Meta:       metaCfg,
 		Metrics:    metricsReg,
 	}).SetupWithManager(mgr); err != nil {
-		logger.Error(err, "unable to create VPA controller")
+		setupLog.Error(err, "unable to create VPA controller")
 		return err
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		logger.Error(err, "failed to set up health check")
+		setupLog.Error(err, "failed to set up health check")
 		return err
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		logger.Error(err, "failed to set up ready check")
+		setupLog.Error(err, "failed to set up ready check")
 		return err
 	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
-		logger.Error(err, "manager encountered an error while running")
+		setupLog.Error(err, "manager encountered an error while running")
 		return err
 	}
 
