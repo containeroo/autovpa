@@ -33,7 +33,7 @@ ENVTEST_K8S_VERSION ?= 1.30.0
 # renovate: datasource=github-releases depName=kubernetes-sigs/controller-runtime
 ENVTEST_VERSION ?= release-0.18
 # renovate: datasource=github-releases depName=golangci/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.8.0
+GOLANGCI_LINT_VERSION ?= v2.9.0
 # renovate: datasource=github-releases depName=google/yamlfmt
 YAMLFMT_VERSION ?= v0.21.0
 # renovate: datasource=github-releases depName=kubernetes-sigs/kind
