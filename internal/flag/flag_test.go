@@ -111,7 +111,7 @@ func TestParseArgs(t *testing.T) {
 		_, err := ParseArgs(args, "0.0.0")
 
 		require.Error(t, err)
-		assert.EqualError(t, err, "unknown flag: --invalid-flag")
+		assert.EqualError(t, err, "unknown flag --invalid-flag")
 	})
 
 	t.Run("Test Usage", func(t *testing.T) {
@@ -219,7 +219,7 @@ func TestParseArgs(t *testing.T) {
 		args := []string{"--metrics-bind-address", ":invalid"}
 		_, err := ParseArgs(args, "0.0.0")
 		require.Error(t, err)
-		assert.EqualError(t, err, "invalid value for flag --metrics-bind-address: invalid TCP address \":invalid\": lookup tcp/invalid: unknown port.")
+		assert.EqualError(t, err, "invalid value for flag --metrics-bind-address: invalid TCP address \":invalid\": lookup tcp/invalid: unknown port")
 	})
 
 	t.Run("Invalid probes listen address (invalid)", func(t *testing.T) {
@@ -228,6 +228,6 @@ func TestParseArgs(t *testing.T) {
 		args := []string{"--health-probe-bind-address", ":invalid"}
 		_, err := ParseArgs(args, "0.0.0")
 		require.Error(t, err)
-		assert.EqualError(t, err, "invalid value for flag --health-probe-bind-address: invalid TCP address \":invalid\": lookup tcp/invalid: unknown port.")
+		assert.EqualError(t, err, "invalid value for flag --health-probe-bind-address: invalid TCP address \":invalid\": lookup tcp/invalid: unknown port")
 	})
 }
