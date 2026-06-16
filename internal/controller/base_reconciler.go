@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -49,7 +49,7 @@ type desiredVPAState struct {
 type BaseReconciler struct {
 	KubeClient client.Client
 	Logger     *logr.Logger
-	Recorder   record.EventRecorder
+	Recorder   events.EventRecorder
 	Metrics    *metrics.Registry
 	Meta       MetaConfig
 	Profiles   ProfileConfig
@@ -57,7 +57,7 @@ type BaseReconciler struct {
 
 const fieldManager = "autovpa"
 
-// Event types.
+// Event reasons.
 const (
 	vpaEventProfileAnnotationMissing = "ProfileAnnotationMissing"
 	vpaEventProfileNotFound          = "ProfileNotFound"
@@ -65,6 +65,14 @@ const (
 	vpaEventDeletedObsoleteVPA       = "DeletedObsoleteVPA"
 	vpaEventVPACreated               = "VPACreated"
 	vpaEventVPAUpdated               = "VPAUpdated"
+)
+
+// Event actions.
+const (
+	vpaActionSkipVPA   = "SkipVPA"
+	vpaActionCreateVPA = "CreateVPA"
+	vpaActionUpdateVPA = "UpdateVPA"
+	vpaActionDeleteVPA = "DeleteVPA"
 )
 
 // Metric labels.
@@ -103,15 +111,19 @@ func (b *BaseReconciler) ReconcileWorkload(
 	annotations := obj.GetAnnotations()
 	profileName, hasProfile := annotations[b.Meta.ProfileKey]
 	if !hasProfile || profileName == "" {
-		log.Info("profile annotation missing; skipping VPA reconciliation",
+		log.Info(
+			"profile annotation missing; skipping VPA reconciliation",
 			"annotation", b.Meta.ProfileKey,
 		)
 
-		b.Recorder.Event(
+		b.Recorder.Eventf(
 			obj,
+			nil,
 			corev1.EventTypeWarning,
 			vpaEventProfileAnnotationMissing,
-			fmt.Sprintf("annotation %q missing; skipping VPA", b.Meta.ProfileKey),
+			vpaActionSkipVPA,
+			"Annotation %q missing; skipping VPA",
+			b.Meta.ProfileKey,
 		)
 
 		b.Metrics.IncVPASkipped(
@@ -136,15 +148,19 @@ func (b *BaseReconciler) ReconcileWorkload(
 		// Invalid configuration: profile doesn't exist. This is surfaced as an
 		// Event and metric, but we do not requeue to avoid hot-looping until
 		// someone fixes the profile config.
-		log.Info("profile not found; skipping VPA reconciliation",
+		log.Info(
+			"profile not found; skipping VPA reconciliation",
 			"profile", selectedProfile,
 		)
 
 		b.Recorder.Eventf(
 			obj,
+			nil,
 			corev1.EventTypeWarning,
 			vpaEventProfileNotFound,
-			"profile %q not found", selectedProfile,
+			vpaActionSkipVPA,
+			"Profile %q not found",
+			selectedProfile,
 		)
 
 		b.Metrics.IncVPASkipped(
@@ -181,16 +197,21 @@ func (b *BaseReconciler) ReconcileWorkload(
 			return ctrl.Result{}, err
 		}
 
-		log.Info("created VPA",
+		log.Info(
+			"created VPA",
 			"vpa", desired.Name,
 			"profile", selectedProfile,
 		)
 
 		b.Recorder.Eventf(
 			obj,
+			nil,
 			corev1.EventTypeNormal,
 			vpaEventVPACreated,
-			"Created VPA %s with profile %s", desired.Name, selectedProfile,
+			vpaActionCreateVPA,
+			"Created VPA %s with profile %s",
+			desired.Name,
+			selectedProfile,
 		)
 
 		b.Metrics.IncVPACreated(ns, name, targetGVK.Kind, selectedProfile)
@@ -213,16 +234,21 @@ func (b *BaseReconciler) ReconcileWorkload(
 		return ctrl.Result{}, err
 	}
 
-	log.Info("updated VPA",
+	log.Info(
+		"updated VPA",
 		"vpa", desired.Name,
 		"profile", selectedProfile,
 	)
 
 	b.Recorder.Eventf(
 		obj,
+		updated,
 		corev1.EventTypeNormal,
 		vpaEventVPAUpdated,
-		"Updated VPA %s to profile %s", desired.Name, selectedProfile,
+		vpaActionUpdateVPA,
+		"Updated VPA %s to profile %s",
+		desired.Name,
+		selectedProfile,
 	)
 
 	b.Metrics.IncVPAUpdated(ns, name, targetGVK.Kind, selectedProfile)
@@ -261,7 +287,8 @@ func (b *BaseReconciler) DeleteObsoleteManagedVPAs(
 			return fmt.Errorf("delete obsolete VPA %s: %w", vpa.GetName(), err)
 		}
 
-		b.Logger.Info("deleted obsolete VPA",
+		b.Logger.Info(
+			"deleted obsolete VPA",
 			"vpa", vpa.GetName(),
 			"namespace", owner.GetNamespace(),
 			"workload", owner.GetName(),
@@ -273,9 +300,12 @@ func (b *BaseReconciler) DeleteObsoleteManagedVPAs(
 
 		b.Recorder.Eventf(
 			owner,
+			vpa,
 			corev1.EventTypeNormal,
 			vpaEventDeletedObsoleteVPA,
-			"Deleted obsolete VPA %s", vpa.GetName(),
+			vpaActionDeleteVPA,
+			"Deleted obsolete VPA %s",
+			vpa.GetName(),
 		)
 	}
 
@@ -331,7 +361,8 @@ func (b *BaseReconciler) deleteManagedVPAs(
 				return fmt.Errorf("delete VPA %s: %w", vpa.GetName(), err)
 			}
 
-			b.Logger.Info("deleted managed VPA for workload",
+			b.Logger.Info(
+				"deleted managed VPA for workload",
 				"vpa", vpa.GetName(),
 				"namespace", owner.GetNamespace(),
 				"workload", owner.GetName(),
@@ -344,9 +375,13 @@ func (b *BaseReconciler) deleteManagedVPAs(
 
 			b.Recorder.Eventf(
 				owner,
+				vpa,
 				corev1.EventTypeNormal,
 				vpaEventDeletedManagedVPA,
-				"Deleted managed VPA %s for workload %s", vpa.GetName(), owner.GetName(),
+				vpaActionDeleteVPA,
+				"Deleted managed VPA %s for workload %s",
+				vpa.GetName(),
+				owner.GetName(),
 			)
 		}
 	}

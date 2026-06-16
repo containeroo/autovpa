@@ -90,7 +90,7 @@ func TestControllerBuildVPASpec(t *testing.T) {
 		t.Parallel()
 		profile := config.ProfileSpec{
 			UpdatePolicy: &vpaautoscaling.PodUpdatePolicy{
-				UpdateMode: updateModePtr(t, vpaautoscaling.UpdateModeAuto),
+				UpdateMode: updateModePtr(t, vpaautoscaling.UpdateModeRecreate),
 			},
 		}
 		gvk := appsv1.SchemeGroupVersion.WithKind("Deployment")
@@ -104,7 +104,7 @@ func TestControllerBuildVPASpec(t *testing.T) {
 		require.Equal(t, "demo", target["name"])
 
 		updatePolicy := spec["updatePolicy"].(map[string]any)
-		assert.Equal(t, string(vpaautoscaling.UpdateModeAuto), updatePolicy["updateMode"])
+		assert.Equal(t, string(vpaautoscaling.UpdateModeRecreate), updatePolicy["updateMode"])
 	})
 }
 

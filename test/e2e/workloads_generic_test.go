@@ -273,7 +273,7 @@ var _ = Describe("Generic", Serial, Ordered, func() {
 
 		expected := map[string]any{
 			"updatePolicy": map[string]any{
-				"updateMode": string(vpaautoscaling.UpdateModeAuto),
+				"updateMode": string(vpaautoscaling.UpdateModeRecreate),
 			},
 			"resourcePolicy": map[string]any{
 				"containerPolicies": []any{

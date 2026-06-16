@@ -57,12 +57,12 @@ func TestCopyProfileSpec(t *testing.T) {
 		t.Parallel()
 		orig := ProfileSpec{
 			UpdatePolicy: &vpaautoscaling.PodUpdatePolicy{
-				UpdateMode: updateModePtr(t, vpaautoscaling.UpdateModeAuto),
+				UpdateMode: updateModePtr(t, vpaautoscaling.UpdateModeRecreate),
 			},
 		}
 		cp := copyProfileSpec(orig)
 		orig.UpdatePolicy.UpdateMode = updateModePtr(t, vpaautoscaling.UpdateModeOff)
 
-		assert.Equal(t, vpaautoscaling.UpdateModeAuto, *cp.UpdatePolicy.UpdateMode)
+		assert.Equal(t, vpaautoscaling.UpdateModeRecreate, *cp.UpdatePolicy.UpdateMode)
 	})
 }

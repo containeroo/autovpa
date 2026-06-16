@@ -41,7 +41,7 @@ defaultProfile: p1
 profiles:
   p1:
     updatePolicy:
-      updateMode: "Auto"
+      updateMode: "Recreate"
 `), 0o644)
 		require.NoError(t, err)
 
@@ -83,7 +83,7 @@ defaultProfile: p1
 profiles:
   p1:
     updatePolicy:
-      updateMode: "Auto"
+      updateMode: "Recreate"
 `)
 
 		cfg, err := parse(data)
@@ -112,7 +112,7 @@ profiles:
 profiles:
   p1:
     updatePolicy:
-      updateMode: "Auto"
+      updateMode: "Recreate"
 `)
 
 		cfg, err := parse(data)
@@ -136,7 +136,7 @@ profiles:
   p1:
     spec:
       updatePolicy:
-        updateMode: "Auto"
+        updateMode: "Recreate"
 `)
 
 		_, err := parse(data)
@@ -192,6 +192,21 @@ func TestProfileSpecUnmarshalJSON(t *testing.T) {
 
 		data := []byte(`
 updatePolicy:
+  updateMode: false
+`)
+		var spec ProfileSpec
+		require.NoError(t, yaml.Unmarshal(data, &spec))
+
+		mode := spec.UpdatePolicy.UpdateMode
+		require.NotNil(t, mode)
+		assert.Equal(t, vpaautoscaling.UpdateModeOff, *mode)
+	})
+
+	t.Run("String Off maps to Off", func(t *testing.T) {
+		t.Parallel()
+
+		data := []byte(`
+updatePolicy:
   updateMode: Off
 `)
 		var spec ProfileSpec
@@ -202,7 +217,7 @@ updatePolicy:
 		assert.Equal(t, vpaautoscaling.UpdateModeOff, *mode)
 	})
 
-	t.Run("Boolean true maps to Auto", func(t *testing.T) {
+	t.Run("Boolean true maps to Recreate", func(t *testing.T) {
 		t.Parallel()
 
 		data := []byte(`
@@ -214,10 +229,10 @@ updatePolicy:
 
 		mode := spec.UpdatePolicy.UpdateMode
 		require.NotNil(t, mode)
-		assert.Equal(t, vpaautoscaling.UpdateModeAuto, *mode)
+		assert.Equal(t, vpaautoscaling.UpdateModeRecreate, *mode)
 	})
 
-	t.Run("Boolean On maps to true", func(t *testing.T) {
+	t.Run("String On maps to Recreate", func(t *testing.T) {
 		t.Parallel()
 
 		data := []byte(`
@@ -229,10 +244,10 @@ updatePolicy:
 
 		mode := spec.UpdatePolicy.UpdateMode
 		require.NotNil(t, mode)
-		assert.Equal(t, vpaautoscaling.UpdateModeAuto, *mode)
+		assert.Equal(t, vpaautoscaling.UpdateModeRecreate, *mode)
 	})
 
-	t.Run("Boolean Auto maps to Auto", func(t *testing.T) {
+	t.Run("Legacy Auto maps to Recreate", func(t *testing.T) {
 		t.Parallel()
 
 		data := []byte(`
@@ -244,10 +259,40 @@ updatePolicy:
 
 		mode := spec.UpdatePolicy.UpdateMode
 		require.NotNil(t, mode)
-		assert.Equal(t, vpaautoscaling.UpdateModeAuto, *mode)
+		assert.Equal(t, vpaautoscaling.UpdateModeRecreate, *mode)
 	})
 
-	t.Run("Boolean Recreate maps to InPlaceOrRecreate", func(t *testing.T) {
+	t.Run("Explicit Recreate maps to Recreate", func(t *testing.T) {
+		t.Parallel()
+
+		data := []byte(`
+updatePolicy:
+  updateMode: Recreate
+`)
+		var spec ProfileSpec
+		require.NoError(t, yaml.Unmarshal(data, &spec))
+
+		mode := spec.UpdatePolicy.UpdateMode
+		require.NotNil(t, mode)
+		assert.Equal(t, vpaautoscaling.UpdateModeRecreate, *mode)
+	})
+
+	t.Run("Explicit Initial maps to Initial", func(t *testing.T) {
+		t.Parallel()
+
+		data := []byte(`
+updatePolicy:
+  updateMode: Initial
+`)
+		var spec ProfileSpec
+		require.NoError(t, yaml.Unmarshal(data, &spec))
+
+		mode := spec.UpdatePolicy.UpdateMode
+		require.NotNil(t, mode)
+		assert.Equal(t, vpaautoscaling.UpdateModeInitial, *mode)
+	})
+
+	t.Run("Explicit InPlaceOrRecreate maps to InPlaceOrRecreate", func(t *testing.T) {
 		t.Parallel()
 
 		data := []byte(`

@@ -85,7 +85,8 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 	}
 
 	for name, profile := range cfg.Profiles {
-		setupLog.Info("loaded profile",
+		setupLog.Info(
+			"loaded profile",
 			"name", name,
 			"nameTemplate", utils.DefaultIfZero(profile.NameTemplate, flags.DefaultNameTemplate),
 			"spec", profile.Spec,
@@ -181,7 +182,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		BaseReconciler: controller.BaseReconciler{
 			Logger:     &logger,
 			KubeClient: mgr.GetClient(),
-			Recorder:   mgr.GetEventRecorderFor("deployment-controller"),
+			Recorder:   mgr.GetEventRecorder("deployment-controller"),
 			Profiles:   profilesCfg,
 			Meta:       metaCfg,
 			Metrics:    metricsReg,
@@ -195,7 +196,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		BaseReconciler: controller.BaseReconciler{
 			Logger:     &logger,
 			KubeClient: mgr.GetClient(),
-			Recorder:   mgr.GetEventRecorderFor("statefulset-controller"),
+			Recorder:   mgr.GetEventRecorder("statefulset-controller"),
 			Profiles:   profilesCfg,
 			Meta:       metaCfg,
 			Metrics:    metricsReg,
@@ -209,7 +210,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		BaseReconciler: controller.BaseReconciler{
 			Logger:     &logger,
 			KubeClient: mgr.GetClient(),
-			Recorder:   mgr.GetEventRecorderFor("daemonset-controller"),
+			Recorder:   mgr.GetEventRecorder("daemonset-controller"),
 			Profiles:   profilesCfg,
 			Meta:       metaCfg,
 			Metrics:    metricsReg,

@@ -38,7 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	vpaautoscaling "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -90,7 +90,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		ctx := context.Background()
 		scheme := newScheme(t)
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
-		rec := record.NewFakeRecorder(10)
+		rec := events.NewFakeRecorder(10)
 		logger := logr.Discard()
 
 		promReg := prometheus.NewRegistry()
@@ -126,8 +126,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		_, err := reconciler.ReconcileWorkload(ctx, dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))
 		require.NoError(t, err)
 
-		// Assert by gathering from the registry and finding the matching series.
-		got := mustGetCounterValue(t, promReg,
+		got := mustGetCounterValue(
+			t, promReg,
 			"autovpa_vpa_skipped_total",
 			map[string]string{
 				"namespace": "ns1",
@@ -144,7 +144,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		ctx := context.Background()
 		scheme := newScheme(t)
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
-		rec := record.NewFakeRecorder(10)
+		rec := events.NewFakeRecorder(10)
 		logger := logr.Discard()
 
 		promReg := prometheus.NewRegistry()
@@ -181,8 +181,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		_, err := reconciler.ReconcileWorkload(ctx, dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))
 		require.NoError(t, err)
 
-		// Assert by gathering from the registry and finding the matching series.
-		got := mustGetCounterValue(t, promReg,
+		got := mustGetCounterValue(
+			t, promReg,
 			"autovpa_vpa_skipped_total",
 			map[string]string{
 				"namespace": "ns1",
@@ -199,7 +199,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		ctx := context.Background()
 		scheme := newScheme(t)
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
-		rec := record.NewFakeRecorder(10)
+		rec := events.NewFakeRecorder(10)
 		logger := logr.Discard()
 
 		promReg := prometheus.NewRegistry()
@@ -250,8 +250,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		assert.Equal(t, "demo", target["name"])
 		assert.Equal(t, "Deployment", target["kind"])
 
-		// Assert by gathering from the registry and finding the matching series.
-		got := mustGetCounterValue(t, promReg,
+		got := mustGetCounterValue(
+			t, promReg,
 			"autovpa_vpa_created_total",
 			map[string]string{
 				"namespace": "ns1",
@@ -297,7 +297,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing, dep).Build()
-		rec := record.NewFakeRecorder(10)
+		rec := events.NewFakeRecorder(10)
 		logger := logr.Discard()
 
 		cfg := &config.Config{
@@ -330,12 +330,10 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		_, err := reconciler.ReconcileWorkload(ctx, dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))
 		require.NoError(t, err)
 
-		// old VPA should be deleted
 		err = client.Get(ctx, types.NamespacedName{Name: legacyName, Namespace: "ns1"}, newVPAObject())
 		require.True(t, apierrors.IsNotFound(err))
 
 		newVPAName := renderDeploymentVPAName(t, "ns1", dep.GetName(), "p2")
-		// new VPA with desired name should exist
 		err = client.Get(ctx, types.NamespacedName{Name: newVPAName, Namespace: "ns1"}, newVPAObject())
 		require.NoError(t, err)
 	})
@@ -359,7 +357,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
-		rec := record.NewFakeRecorder(10)
+		rec := events.NewFakeRecorder(10)
 		logger := logr.Discard()
 
 		cfg := &config.Config{
@@ -368,7 +366,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 				"p1": {
 					Spec: config.ProfileSpec{
 						UpdatePolicy: &vpaautoscaling.PodUpdatePolicy{
-							UpdateMode: updateModePtr(t, vpaautoscaling.UpdateModeAuto),
+							UpdateMode: updateModePtr(t, vpaautoscaling.UpdateModeRecreate),
 						},
 					},
 				},
@@ -408,10 +406,10 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 
 		spec := vpa.Object["spec"].(map[string]any)
 		updatePolicy := spec["updatePolicy"].(map[string]any)
-		assert.Equal(t, "Auto", updatePolicy["updateMode"])
+		assert.Equal(t, "Recreate", updatePolicy["updateMode"])
 
-		// Assert by gathering from the registry and finding the matching series.
-		got := mustGetCounterValue(t, promReg,
+		got := mustGetCounterValue(
+			t, promReg,
 			"autovpa_vpa_updated_total",
 			map[string]string{
 				"namespace": "ns1",
@@ -431,7 +429,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		dep.SetNamespace("ns1")
 		dep.SetName("demo")
 		dep.SetUID("uid1")
-		dep.SetAnnotations(map[string]string{}) // annotation removed
+		dep.SetAnnotations(map[string]string{})
 
 		managed := true
 		vpa := newVPAObject()
@@ -451,7 +449,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		vpa.Object["spec"] = map[string]any{}
 
 		client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(dep, vpa).Build()
-		rec := record.NewFakeRecorder(10)
+		rec := events.NewFakeRecorder(10)
 		logger := logr.Discard()
 
 		cfg := &config.Config{
@@ -484,8 +482,8 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		err = client.Get(ctx, types.NamespacedName{Name: vpaName, Namespace: "ns1"}, vpa)
 		assert.True(t, apierrors.IsNotFound(err))
 
-		// Assert by gathering from the registry and finding the matching series.
-		got := mustGetCounterValue(t, promReg,
+		got := mustGetCounterValue(
+			t, promReg,
 			"autovpa_vpa_skipped_total",
 			map[string]string{
 				"namespace": "ns1",
@@ -528,18 +526,15 @@ func TestBaseReconciler_buildDesiredVPA(t *testing.T) {
 	desired, err := br.buildDesiredVPA(dep, targetGVK, "p1", profile)
 	require.NoError(t, err)
 
-	// Expected name via the same template helper used in production.
 	expectedName := renderDeploymentVPAName(t, "ns1", "demo", "p1")
 	assert.Equal(t, expectedName, desired.Name)
 	assert.Equal(t, "p1", desired.Profile)
 
-	// Managed + profile labels must be present.
 	assert.Equal(t, map[string]string{
 		"vpa/managed": "true",
 		"vpa/profile": "p1",
 	}, desired.Labels)
 
-	// Spec should contain a targetRef pointing to the workload.
 	spec := desired.Spec
 	targetRef, ok := spec["targetRef"].(map[string]any)
 	require.True(t, ok)
@@ -554,19 +549,16 @@ func TestBaseReconciler_fetchExistingVPA(t *testing.T) {
 	scheme := newScheme(t)
 	logger := logr.Discard()
 
-	// Build a client with no VPAs.
 	client := fake.NewClientBuilder().WithScheme(scheme).Build()
 	br := BaseReconciler{
 		KubeClient: client,
 		Logger:     &logger,
 	}
 
-	// Not found → nil, nil.
 	obj, err := br.fetchExistingVPA(ctx, types.NamespacedName{Name: "missing", Namespace: "ns1"})
 	require.NoError(t, err)
 	assert.Nil(t, obj)
 
-	// Create a VPA and ensure it is returned.
 	existing := newVPAObject()
 	existing.SetNamespace("ns1")
 	existing.SetName("present")
@@ -626,22 +618,18 @@ func TestBaseReconciler_mergeVPA(t *testing.T) {
 	updated, err := br.mergeVPA(existing, desired, owner)
 	require.NoError(t, err)
 
-	// Existing must not be mutated.
 	existingSpec := existing.Object["spec"].(map[string]any)
 	assert.NotContains(t, existingSpec, "foo")
 
-	// Labels must be merged, with desired overriding existing keys.
 	gotLabels := updated.GetLabels()
 	assert.Equal(t, "yes", gotLabels["keep"])
 	assert.Equal(t, "new", gotLabels["override"])
 	assert.Equal(t, "true", gotLabels["vpa/managed"])
 	assert.Equal(t, "p1", gotLabels["vpa/profile"])
 
-	// Spec must match desired.
 	gotSpec := updated.Object["spec"].(map[string]any)
 	assert.Equal(t, "bar", gotSpec["foo"])
 
-	// Owner reference must be set with controller=true.
 	owners := updated.GetOwnerReferences()
 	require.Len(t, owners, 1)
 	assert.Equal(t, "demo", owners[0].Name)
@@ -656,7 +644,6 @@ func TestBaseReconciler_applyVPA(t *testing.T) {
 	scheme := newScheme(t)
 	logger := logr.Discard()
 
-	// Seed cluster with an existing VPA.
 	existing := newVPAObject()
 	existing.SetNamespace("ns1")
 	existing.SetName("demo-vpa")
@@ -669,7 +656,6 @@ func TestBaseReconciler_applyVPA(t *testing.T) {
 		Logger:     &logger,
 	}
 
-	// Prepare an updated object with managedFields set to ensure they are cleared.
 	toApply := existing.DeepCopy()
 	toApply.Object["spec"] = map[string]any{"field": "new"}
 	toApply.SetManagedFields([]metav1.ManagedFieldsEntry{
@@ -679,10 +665,8 @@ func TestBaseReconciler_applyVPA(t *testing.T) {
 	err := br.applyVPA(ctx, toApply)
 	require.NoError(t, err)
 
-	// Ensure managedFields were cleared before/after the call.
 	assert.Len(t, toApply.GetManagedFields(), 0)
 
-	// Spec in the cluster should be updated.
 	got := newVPAObject()
 	err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, got)
 	require.NoError(t, err)
@@ -718,7 +702,6 @@ func TestBaseReconciler_createVPA(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// VPA should exist with expected fields and owner reference.
 	got := newVPAObject()
 	err = client.Get(ctx, types.NamespacedName{Name: "demo-vpa", Namespace: "ns1"}, got)
 	require.NoError(t, err)
@@ -741,7 +724,6 @@ func TestBaseReconciler_updateVPA(t *testing.T) {
 	scheme := newScheme(t)
 	logger := logr.Discard()
 
-	// Existing VPA in cluster.
 	existing := newVPAObject()
 	existing.SetNamespace("ns1")
 	existing.SetName("demo-vpa")
@@ -754,7 +736,6 @@ func TestBaseReconciler_updateVPA(t *testing.T) {
 		Logger:     &logger,
 	}
 
-	// Updated object to send.
 	updated := existing.DeepCopy()
 	updated.Object["spec"] = map[string]any{"field": "new"}
 
@@ -776,7 +757,6 @@ func TestBaseReconciler_listManagedVPAs(t *testing.T) {
 	scheme := newScheme(t)
 	logger := logr.Discard()
 
-	// Two managed VPAs in ns1, one unmanaged, one managed in another namespace.
 	vpa1 := newVPAObject()
 	vpa1.SetNamespace("ns1")
 	vpa1.SetName("vpa-managed-1")
@@ -808,7 +788,6 @@ func TestBaseReconciler_listManagedVPAs(t *testing.T) {
 	list, err := br.listManagedVPAs(ctx, "ns1")
 	require.NoError(t, err)
 
-	// Only vpa1 should be returned for ns1.
 	require.Len(t, list, 1)
 	assert.Equal(t, "vpa-managed-1", list[0].GetName())
 }
@@ -819,7 +798,6 @@ func newScheme(t *testing.T) *runtime.Scheme {
 	err := appsv1.AddToScheme(s)
 	require.NoError(t, err)
 
-	// Register VPA unstructured types.
 	s.AddKnownTypeWithName(vpaGVK, &unstructured.Unstructured{})
 	s.AddKnownTypeWithName(schema.GroupVersionKind{
 		Group:   vpaGVK.Group,

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	vpaautoscaling "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"sigs.k8s.io/yaml"
@@ -54,7 +55,7 @@ func LoadFile(filePath string) (*Config, error) {
 }
 
 // UnmarshalJSON supports inline VPA spec fields and rejects a nested
-// "spec" block . It inlines all keys except nameTemplate into the ProfileSpec.
+// "spec" block. It inlines all keys except nameTemplate into the ProfileSpec.
 func (p *Profile) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -95,43 +96,74 @@ func (p *Profile) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalJSON tolerates YAML booleans for updateMode (Off/On) by coercing them
-// into string values before decoding into the typed VPA spec. Booleans map to
-// the legacy on/off modes: true → "Auto", false → "Off". All other modes (e.g.
-// "Recreate", "Initial", "InPlaceOrRecreate") must be provided as strings.
+// UnmarshalJSON normalizes legacy updateMode shortcuts before decoding into
+// the typed VPA spec.
+//
+// Legacy values are accepted for backwards compatibility:
+//   - true, "true", "on", and "auto" are normalized to "Recreate".
+//   - false, "false", and "off" are normalized to "Off".
+//
+// Explicit non-deprecated modes such as "Recreate", "Initial", and
+// "InPlaceOrRecreate" are preserved.
 func (p *ProfileSpec) UnmarshalJSON(data []byte) error {
 	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
-	// Coerce boolean updateMode to strings understood by the VPA enum.
 	if up, ok := raw["updatePolicy"].(map[string]any); ok {
-		if mode, ok := up["updateMode"].(bool); ok {
-			// legacy on/off shortcut: true → Auto, false → Off
-			if mode {
-				up["updateMode"] = string(vpaautoscaling.UpdateModeAuto)
-			} else {
-				up["updateMode"] = string(vpaautoscaling.UpdateModeOff)
+		if mode, ok := up["updateMode"]; ok {
+			normalized, err := normalizeUpdateMode(mode)
+			if err != nil {
+				return err
 			}
+			up["updateMode"] = normalized
 		}
 	}
 
-	// Encode spec into JSON.
 	normalized, err := json.Marshal(raw)
 	if err != nil {
 		return err
 	}
 
-	// Parse the JSON into the typed spec.
 	var spec vpaautoscaling.VerticalPodAutoscalerSpec
 	if err := json.Unmarshal(normalized, &spec); err != nil {
 		return err
 	}
 
-	// Store the normalized spec.
 	*p = ProfileSpec(spec)
 	return nil
+}
+
+// normalizeUpdateMode maps legacy updateMode aliases to explicit non-deprecated
+// VPA update modes.
+func normalizeUpdateMode(value any) (string, error) {
+	switch v := value.(type) {
+	case bool:
+		if v {
+			return string(vpaautoscaling.UpdateModeRecreate), nil
+		}
+		return string(vpaautoscaling.UpdateModeOff), nil
+
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "true", "on", "auto":
+			return string(vpaautoscaling.UpdateModeRecreate), nil
+		case "false", "off":
+			return string(vpaautoscaling.UpdateModeOff), nil
+		case "initial":
+			return string(vpaautoscaling.UpdateModeInitial), nil
+		case "recreate":
+			return string(vpaautoscaling.UpdateModeRecreate), nil
+		case "inplaceorrecreate":
+			return string(vpaautoscaling.UpdateModeInPlaceOrRecreate), nil
+		default:
+			return v, nil
+		}
+
+	default:
+		return "", fmt.Errorf("unsupported updateMode value %v of type %T", value, value)
+	}
 }
 
 // parse unmarshals a profiles YAML document into a Config.
