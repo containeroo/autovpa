@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/containeroo/autovpa/internal/app"
@@ -33,8 +32,7 @@ var (
 func main() {
 	ctx := ctrl.SetupSignalHandler()
 
-	if err := app.Run(ctx, Version, os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err := app.Run(ctx, Version, os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		os.Exit(1)
 	}
 }

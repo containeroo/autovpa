@@ -42,10 +42,11 @@ func TestRun(t *testing.T) {
 			"--config=" + cfg,
 		}
 		out := &bytes.Buffer{}
+		errOut := &bytes.Buffer{}
 
 		errCh := make(chan error, 1)
 		go func() {
-			errCh <- Run(ctx, "v0.0.0", args, out)
+			errCh <- Run(ctx, "v0.0.0", args, out, errOut)
 		}()
 
 		time.Sleep(2 * time.Second)
@@ -65,33 +66,39 @@ func TestRun(t *testing.T) {
 		ctx := t.Context()
 		args := []string{"--invalid-flag"}
 		out := &bytes.Buffer{}
+		errOut := &bytes.Buffer{}
 
-		err := Run(ctx, "v0.0.0", args, out)
+		err := Run(ctx, "v0.0.0", args, out, errOut)
 
 		require.Error(t, err)
 		assert.EqualError(t, err, "unknown flag --invalid-flag")
+		assert.Equal(t, "unknown flag --invalid-flag\n", errOut.String())
 	})
 
 	t.Run("Request version", func(t *testing.T) {
 		ctx := t.Context()
 		args := []string{"--version"}
 		out := &bytes.Buffer{}
+		errOut := &bytes.Buffer{}
 
-		err := Run(ctx, "v0.0.0", args, out)
+		err := Run(ctx, "v0.0.0", args, out, errOut)
 
 		assert.NoError(t, err)
 		assert.Equal(t, "v0.0.0", out.String())
+		assert.Empty(t, errOut.String())
 	})
 
 	t.Run("Logger error", func(t *testing.T) {
 		ctx := t.Context()
 		args := []string{"--log-encoder", "invalid"}
 		out := &bytes.Buffer{}
+		errOut := &bytes.Buffer{}
 
-		err := Run(ctx, "v0.0.0", args, out)
+		err := Run(ctx, "v0.0.0", args, out, errOut)
 
 		require.Error(t, err)
 		assert.EqualError(t, err, "invalid value for flag --log-encoder: must be one of: json, console")
+		assert.Equal(t, "invalid value for flag --log-encoder: must be one of: json, console\n", errOut.String())
 	})
 
 	t.Run("Missing profile file", func(t *testing.T) {
@@ -102,11 +109,13 @@ func TestRun(t *testing.T) {
 			"--metrics-enabled=false",
 		}
 		out := &bytes.Buffer{}
+		errOut := &bytes.Buffer{}
 
-		err := Run(ctx, "v0.0.0", args, out)
+		err := Run(ctx, "v0.0.0", args, out, errOut)
 
 		require.Error(t, err)
 		assert.EqualError(t, err, "read profiles file \"/tmp/does-not-exist.yaml\": open /tmp/does-not-exist.yaml: no such file or directory")
+		assert.Empty(t, errOut.String())
 	})
 
 	t.Run("Wrong profile file", func(t *testing.T) {
@@ -127,11 +136,13 @@ profiles:
 		}
 
 		out := &bytes.Buffer{}
+		errOut := &bytes.Buffer{}
 
-		err = Run(ctx, "v0.0.0", args, out)
+		err = Run(ctx, "v0.0.0", args, out, errOut)
 
 		require.Error(t, err)
 		assert.EqualError(t, err, "profiles must be set")
+		assert.Empty(t, errOut.String())
 	})
 
 	t.Run("Duplicate keys", func(t *testing.T) {
@@ -145,11 +156,13 @@ profiles:
 			"--metrics-enabled=false",
 		}
 		out := &bytes.Buffer{}
+		errOut := &bytes.Buffer{}
 
-		err := Run(ctx, "v0.0.0", args, out)
+		err := Run(ctx, "v0.0.0", args, out, errOut)
 
 		require.Error(t, err)
 		assert.EqualError(t, err, "duplicate key value \"dup\" found for keys \"Managed\" and \"Profile\"")
+		assert.Empty(t, errOut.String())
 	})
 
 	t.Run("Invalid name template", func(t *testing.T) {
@@ -163,11 +176,13 @@ profiles:
 			"--disable-crd-check",
 		}
 		out := &bytes.Buffer{}
+		errOut := &bytes.Buffer{}
 
-		err := Run(ctx, "v0.0.0", args, out)
+		err := Run(ctx, "v0.0.0", args, out, errOut)
 
 		require.Error(t, err)
 		assert.EqualError(t, err, "default name template invalid: parse template: template: name:1: unclosed action")
+		assert.Empty(t, errOut.String())
 	})
 }
 

@@ -49,17 +49,18 @@ func init() {
 }
 
 // Run is the main function of the application.
-func Run(ctx context.Context, version string, args []string, w io.Writer) error {
+func Run(ctx context.Context, version string, args []string, stdOut, stdErr io.Writer) error {
 	flags, err := flag.ParseArgs(args, version)
 	if err != nil {
 		if tinyflags.IsHelpRequested(err) || tinyflags.IsVersionRequested(err) {
-			_, _ = fmt.Fprint(w, err.Error())
+			_, _ = fmt.Fprint(stdOut, err.Error())
 			return nil
 		}
+		_, _ = fmt.Fprintln(stdErr, err)
 		return err
 	}
 
-	logger := logging.InitLogging(flags, w)
+	logger := logging.InitLogging(flags, stdOut)
 	setupLog := logger.WithName("setup")
 	setupLog.Info("initializing autovpa", "version", version)
 
@@ -150,10 +151,12 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 		}
 	}
 
+	reconcilerLog := logger.WithName("reconciler")
+
 	mgr, err := ctrl.NewManager(restCfg, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
-		Logger:                 logger,
+		Logger:                 reconcilerLog,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: flags.ProbeAddr,
 		LeaderElection:         flags.LeaderElection,
@@ -173,7 +176,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 
 	if err := (&controller.DeploymentReconciler{
 		BaseReconciler: controller.BaseReconciler{
-			Logger:     &logger,
+			Logger:     &reconcilerLog,
 			KubeClient: mgr.GetClient(),
 			Recorder:   mgr.GetEventRecorder("deployment-controller"),
 			Profiles:   profilesCfg,
@@ -187,7 +190,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 
 	if err := (&controller.StatefulSetReconciler{
 		BaseReconciler: controller.BaseReconciler{
-			Logger:     &logger,
+			Logger:     &reconcilerLog,
 			KubeClient: mgr.GetClient(),
 			Recorder:   mgr.GetEventRecorder("statefulset-controller"),
 			Profiles:   profilesCfg,
@@ -201,7 +204,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 
 	if err := (&controller.DaemonSetReconciler{
 		BaseReconciler: controller.BaseReconciler{
-			Logger:     &logger,
+			Logger:     &reconcilerLog,
 			KubeClient: mgr.GetClient(),
 			Recorder:   mgr.GetEventRecorder("daemonset-controller"),
 			Profiles:   profilesCfg,
@@ -214,7 +217,7 @@ func Run(ctx context.Context, version string, args []string, w io.Writer) error 
 	}
 
 	if err := (&controller.VPAReconciler{
-		Logger:     &logger,
+		Logger:     &reconcilerLog,
 		KubeClient: mgr.GetClient(),
 		Recorder:   mgr.GetEventRecorderFor("vpa-controller"),
 		Meta:       metaCfg,
