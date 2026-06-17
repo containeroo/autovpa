@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -55,7 +55,7 @@ type VPAReconciler struct {
 	Logger *logr.Logger
 
 	// Recorder emits Kubernetes events for visibility.
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 
 	// Meta contains operator metadata such as label keys.
 	Meta MetaConfig
@@ -123,8 +123,10 @@ func (r *VPAReconciler) Reconcile(
 
 		r.Recorder.Eventf(
 			vpa,
+			nil,
 			corev1.EventTypeNormal,
 			vpaEventOrphaned,
+			vpaActionDeleteVPA,
 			"%s/%s has no controller owner", vpaNamespace, vpaName,
 		)
 
@@ -149,15 +151,18 @@ func (r *VPAReconciler) Reconcile(
 		}
 
 		// Owner object is gone → delete managed VPA.
-		log.Info("owner gone; deleting VPA",
+		log.Info(
+			"owner gone; deleting VPA",
 			"ownerKind", gvk.Kind,
 			"ownerName", ownerName,
 		)
 
 		r.Recorder.Eventf(
 			vpa,
+			nil,
 			corev1.EventTypeNormal,
 			vpaEventOwnerDeleted,
+			vpaActionDeleteVPA,
 			"owner %s %s/%s gone; deleting VPA %s", gvk.Kind, vpaNamespace, ownerName, vpaName,
 		)
 
@@ -173,7 +178,8 @@ func (r *VPAReconciler) Reconcile(
 	}
 
 	// Happy path: managed VPA with valid controller owner.
-	log.Info("managed VPA has valid controller owner",
+	log.Info(
+		"managed VPA has valid controller owner",
 		"ownerKind", gvk.Kind,
 		"ownerName", owner.GetName(),
 	)

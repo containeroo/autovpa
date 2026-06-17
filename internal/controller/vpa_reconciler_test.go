@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -387,7 +387,7 @@ func newTestVPAReconciler(t *testing.T, objs ...client.Object) *VPAReconciler {
 	return &VPAReconciler{
 		KubeClient: c,
 		Logger:     &logger,
-		Recorder:   record.NewFakeRecorder(32),
+		Recorder:   events.NewFakeRecorder(32),
 		Metrics:    metricsReg,
 		Meta: MetaConfig{
 			ProfileKey:   profileKey,

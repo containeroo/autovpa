@@ -75,7 +75,10 @@ func Run(ctx context.Context, version string, args []string, stdOut, stdErr io.W
 	}
 
 	if len(flags.OverriddenValues) > 0 {
-		setupLog.Info("CLI Overrides", "overrides", flags.OverriddenValues)
+		logger.Info(
+			"cli overrides",
+			"overrides", flags.OverriddenValues,
+		)
 	}
 
 	for name, profile := range cfg.Profiles {
@@ -219,7 +222,7 @@ func Run(ctx context.Context, version string, args []string, stdOut, stdErr io.W
 	if err := (&controller.VPAReconciler{
 		Logger:     &reconcilerLog,
 		KubeClient: mgr.GetClient(),
-		Recorder:   mgr.GetEventRecorderFor("vpa-controller"),
+		Recorder:   mgr.GetEventRecorder("vpa-controller"),
 		Meta:       metaCfg,
 		Metrics:    metricsReg,
 	}).SetupWithManager(mgr); err != nil {
