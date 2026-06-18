@@ -53,7 +53,7 @@ func Run(ctx context.Context, version string, args []string, stdOut, stdErr io.W
 	flags, err := flag.ParseArgs(args, version)
 	if err != nil {
 		if tinyflags.IsHelpRequested(err) || tinyflags.IsVersionRequested(err) {
-			_, _ = fmt.Fprint(stdOut, err.Error())
+			_, _ = fmt.Fprint(stdOut, err)
 			return nil
 		}
 		_, _ = fmt.Fprintln(stdErr, err)
