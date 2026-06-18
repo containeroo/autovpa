@@ -1,5 +1,5 @@
 /*
-Copyright 2025 containeroo.ch
+Copyright 2026 containeroo.ch
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -332,7 +332,8 @@ func TestVPAReconciler_fetchExistingVPA(t *testing.T) {
 
 		r := newTestVPAReconciler(t)
 
-		obj, err := r.fetchExistingVPA(context.Background(),
+		obj, err := r.fetchExistingVPA(
+			context.Background(),
 			types.NamespacedName{Name: "none", Namespace: "ns"},
 		)
 
@@ -346,7 +347,8 @@ func TestVPAReconciler_fetchExistingVPA(t *testing.T) {
 		vpa := newManagedVPA(t, "ns", "vpa", "profile")
 		r := newTestVPAReconciler(t, vpa)
 
-		obj, err := r.fetchExistingVPA(context.Background(),
+		obj, err := r.fetchExistingVPA(
+			context.Background(),
 			types.NamespacedName{Name: "vpa", Namespace: "ns"},
 		)
 
