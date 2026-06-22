@@ -2,7 +2,9 @@
 FROM golang:1.26 AS builder
 ARG TARGETOS
 ARG TARGETARCH
-ARG LDFLAGS="-s -w"
+ARG VERSION=dev
+ARG COMMIT=none
+ARG LDFLAGS="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}"
 ENV CGO_ENABLED=0
 
 WORKDIR /workspace
