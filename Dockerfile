@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
   -ldflags="$LDFLAGS" \
   -a \
   -o autovpa \
-  cmd/
+  cmd/main.go
 
 # Create writable runtime directories owned by the root group.
 # The setgid bit keeps new files/directories in group 0, which supports
