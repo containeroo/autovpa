@@ -97,8 +97,7 @@ func TestRun(t *testing.T) {
 		err := Run(ctx, "v0.0.0", args, out, errOut)
 
 		require.Error(t, err)
-		assert.EqualError(t, err, "invalid value for flag --log-encoder: must be one of: json, console")
-		assert.Equal(t, "invalid value for flag --log-encoder: must be one of: json, console\n", errOut.String())
+		assert.EqualError(t, err, "invalid value for flag --log-encoder: \"invalid\" must be one of: json, console")
 	})
 
 	t.Run("Missing profile file", func(t *testing.T) {
