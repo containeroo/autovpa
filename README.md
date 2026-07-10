@@ -17,7 +17,9 @@ AutoVPA watches Deployments, StatefulSets, and DaemonSets and ensures a matching
 
 ```bash
 # Install (Helm)
-helm upgrade --install autovpa ./deploy/kubernetes/chart/autovpa
+helm repo add containeroo https://charts.containeroo.ch
+helm repo update containeroo
+helm upgrade --install autovpa containeroo/autovpa
 
 # Or apply kustomize manifests
 kubectl apply -k deploy/kubernetes
@@ -44,7 +46,7 @@ spec:
 
 ## Installation and Usage
 
-- **Helm**: `helm upgrade --install autovpa ./deploy/kubernetes/chart/autovpa`
+- **Helm**: install `containeroo/autovpa` from `https://charts.containeroo.ch`. The chart source is maintained in [containeroo/helm-charts](https://github.com/containeroo/helm-charts/tree/master/charts/autovpa).
 - **Kustomize/manifests**: apply `deploy/kubernetes/kustomization.yaml` (or the rendered manifests) after setting image/tag/args.
 - **Profiles**: mount a YAML containing `defaultProfile` and `profiles` into the pod (default path `config.yaml`). Each profile may optionally set `nameTemplate` to override the default VPA name template.
 
@@ -52,7 +54,7 @@ spec:
 
 By default, `AutoVPA` watches all namespaces. To restrict it to specific namespaces, pass the `--watch-namespace` flag. This flag can be repeated or comma-separated to specify multiple namespaces. When set, `AutoVPA` will only monitor workloads (and create/update their VPAs) within those namespaces.
 
-If running in namespaced mode, ensure the associated `Role` and `RoleBinding` are configured accordingly. You can use `deploy/manifests/role.template` and `deploy/manifests/rolebinding.template` as starting points for custom RBAC definitions.
+If running in namespaced mode, enable `role.create` and disable `clusterRole.create` in the Helm chart. For manifest-based installations, use `deploy/manifests/role.template` and `deploy/manifests/rolebinding.template` as starting points.
 
 ## Using AutoVPA
 
