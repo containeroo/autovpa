@@ -52,7 +52,14 @@ func ValidateUniqueKeys(keys map[string]string) error {
 	}
 
 	seen := make(map[string]string, len(keys))
-	for k, v := range keys {
+	names := make([]string, 0, len(keys))
+	for name := range keys {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, k := range names {
+		v := keys[k]
 		if dupKey, ok := seen[v]; ok {
 			return fmt.Errorf("duplicate key value %q found for keys %q and %q", v, dupKey, k)
 		}
