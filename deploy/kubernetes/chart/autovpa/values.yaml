@@ -14,11 +14,27 @@ fullnameOverride: ""
 
 # Profile and annotation settings
 profile:
-  # This are the defaults. Uncomment and change as needed.
-  # path: config.yaml
-  # annotation: autovpa.containeroo.ch/profile
-  # managedLabel: autovpa.containeroo.ch/managed
-  # nameTemplate: "{{ .WorkloadName }}-{{ .Profile }}-vpa"
+  path: /etc/autovpa/config.yaml
+  annotation: autovpa.containeroo.ch/profile
+  managedLabel: autovpa.containeroo.ch/managed
+  nameTemplate: "{{ .WorkloadName }}-{{ .Profile }}-vpa"
+  # Create and mount a ConfigMap containing the profiles below. To use an
+  # existing ConfigMap, set create to false and name to its name.
+  configMap:
+    create: true
+    name: ""
+    key: config.yaml
+  defaultProfile: default
+  profiles:
+    default:
+      updatePolicy:
+        updateMode: "Off"
+      resourcePolicy:
+        containerPolicies:
+          - containerName: "*"
+            controlledResources:
+              - cpu
+              - memory
 
 resources:
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -108,7 +124,7 @@ metrics:
         targetPort: 8443
   serviceMonitor:
     enabled: true
-  # Specifies wether to create a PrometheusRule for the operator
+  # Specifies whether to create a PrometheusRule for the operator
   prometheusRule:
     enabled: true
     # Specifies the namespace to create the PrometheusRule in
@@ -136,6 +152,13 @@ clusterRole:
   #   - list
   #   - watch
   #
+  extraRules: []
+
+# Create a namespace-scoped Role and RoleBinding instead of, or in addition
+# to, the cluster-wide RBAC above. Cluster-wide RBAC remains the default.
+role:
+  create: false
+  name: ""
   extraRules: []
 
 serviceAccount:

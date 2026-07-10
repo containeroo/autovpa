@@ -14,8 +14,18 @@ spec:
     metadata:
       labels:
         {{- include "chart.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.profile.configMap.create .Values.podAnnotations }}
       annotations:
-        {{- toYaml .Values.podAnnotations | nindent 8 }}
+        {{- if .Values.profile.configMap.create }}
+        checksum/profiles: {{ include (print $.Template.BasePath "/profile-configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
     spec:
       serviceAccountName: {{ include "chart.serviceAccountName" . }}
       imagePullSecrets:
@@ -62,6 +72,13 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if or .Values.profile.configMap.create .Values.profile.configMap.name }}
+          volumeMounts:
+            - name: profiles
+              mountPath: {{ .Values.profile.path }}
+              subPath: {{ .Values.profile.configMap.key }}
+              readOnly: true
+          {{- end }}
           {{- if .Values.startupProbe.enabled }}
           startupProbe:
             {{- toYaml .Values.startupProbe.spec | nindent 12 }}
@@ -83,4 +100,13 @@ spec:
         {{- toYaml .Values.tolerations | nindent 8 }}
       affinity:
         {{- toYaml .Values.affinity | nindent 8 }}
+      {{- if or .Values.profile.configMap.create .Values.profile.configMap.name }}
+      volumes:
+        - name: profiles
+          configMap:
+            name: {{ include "chart.profileConfigMapName" . }}
+            items:
+              - key: {{ .Values.profile.configMap.key }}
+                path: {{ .Values.profile.configMap.key }}
+      {{- end }}
       terminationGracePeriodSeconds: 10

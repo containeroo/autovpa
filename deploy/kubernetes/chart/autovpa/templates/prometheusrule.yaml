@@ -1,4 +1,4 @@
-{{- if .Values.metrics.prometheusRule.enabled }}
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -21,7 +21,7 @@ spec:
           or absent(autovpavpa_skipped_total)
         for: 5m
         labels:
-          severity: warning
+          severity: {{ .Values.metrics.prometheusRule.severity }}
         annotations:
           summary: AutoVPA metrics missing
           description: AutoVPA metrics are not being scraped for {{ "{{ $labels.job }}" }}.
@@ -29,7 +29,7 @@ spec:
         expr: increase(autovpavpa_skipped_total[5m]) > 0
         for: 5m
         labels:
-          severity: warning
+          severity: {{ .Values.metrics.prometheusRule.severity }}
         annotations:
           summary: AutoVPA is skipping workloads
           description: >-

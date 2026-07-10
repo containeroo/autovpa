@@ -31,10 +31,15 @@ This document provides an overview of the configurable values for the autovpa He
 
 | Key                    | Description                                   | Default Value                    |
 | ---------------------- | --------------------------------------------- | -------------------------------- |
-| `profile.path`         | Path to the profiles file in the container.   | `config.yaml`                    |
+| `profile.path`         | Path to the profiles file in the container.   | `/etc/autovpa/config.yaml`       |
 | `profile.annotation`   | Workload annotation used to select a profile. | `autovpa.containeroo.ch/profile` |
 | `profile.managedLabel` | Label applied to managed VPAs.                | `autovpa.containeroo.ch/managed` |
-| `profile.nameTemplate` | Template for VPA names.                       | `{{ .WorkloadName }}-vpa`        |
+| `profile.nameTemplate` | Template for VPA names.                       | `{{ .WorkloadName }}-{{ .Profile }}-vpa` |
+| `profile.configMap.create` | Create and mount a profile ConfigMap.      | `true`                           |
+| `profile.configMap.name` | Existing/custom profile ConfigMap name.      | `""`                             |
+| `profile.configMap.key` | Key containing the profile configuration.     | `config.yaml`                    |
+| `profile.defaultProfile` | Name of the default profile.                 | `default`                        |
+| `profile.profiles` | Profile definitions written to the ConfigMap.       | Default profile with `Off` mode  |
 
 ---
 
@@ -108,6 +113,9 @@ This document provides an overview of the configurable values for the autovpa He
 | `clusterRole.create`         | Create a ClusterRole and binding.          | `true`        |
 | `clusterRole.name`           | Custom name for the ClusterRole.           | `""`          |
 | `clusterRole.extraRules`     | Additional RBAC rules for the ClusterRole. | `[]`          |
+| `role.create`                | Create a namespace-scoped Role and binding. | `false`       |
+| `role.name`                  | Custom name for the Role.                    | `""`          |
+| `role.extraRules`            | Additional RBAC rules for the Role.          | `[]`          |
 | `serviceAccount.create`      | Create a ServiceAccount.                   | `true`        |
 | `serviceAccount.annotations` | Annotations for the ServiceAccount.        | `{}`          |
 | `serviceAccount.name`        | Custom name for the ServiceAccount.        | `""`          |

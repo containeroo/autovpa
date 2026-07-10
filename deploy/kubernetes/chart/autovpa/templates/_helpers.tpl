@@ -39,7 +39,7 @@ helm.sh/chart: {{ include "chart.chart" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
-app.kubernetes.io/d: {{ .Release.Service }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
@@ -71,4 +71,37 @@ Create the name of the cluster role to use.
 {{- else -}}
     {{ default "default" .Values.clusterRole.name }}
 {{- end -}}
+{{- end -}}
+
+{{/*
+Create the name of the namespaced role to use.
+*/}}
+{{- define "chart.roleName" -}}
+{{- default (include "chart.fullname" .) .Values.role.name -}}
+{{- end -}}
+
+{{/*
+Create the name of the profile ConfigMap to use.
+*/}}
+{{- define "chart.profileConfigMapName" -}}
+{{- default (printf "%s-profiles" (include "chart.fullname" .)) .Values.profile.configMap.name -}}
+{{- end -}}
+
+{{/* Controller permissions shared by ClusterRole and Role modes. */}}
+{{- define "chart.controllerRules" -}}
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch", "update"]
+- apiGroups: ["apps"]
+  resources:
+    - daemonsets
+    - deployments
+    - statefulsets
+    - daemonsets/finalizers
+    - deployments/finalizers
+    - statefulsets/finalizers
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["autoscaling.k8s.io"]
+  resources: ["verticalpodautoscalers"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 {{- end -}}
