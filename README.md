@@ -54,7 +54,12 @@ spec:
 
 By default, `AutoVPA` watches all namespaces. To restrict it to specific namespaces, pass the `--watch-namespace` flag. This flag can be repeated or comma-separated to specify multiple namespaces. When set, `AutoVPA` will only monitor workloads (and create/update their VPAs) within those namespaces.
 
-If running in namespaced mode, enable `role.create` and disable `clusterRole.create` in the Helm chart. For manifest-based installations, use `deploy/manifests/role.template` and `deploy/manifests/rolebinding.template` as starting points.
+For a Helm installation, set `watch.currentNamespace=true` to watch only the
+release namespace, or populate `watch.namespaces` to watch several namespaces.
+The chart automatically replaces controller cluster RBAC with a Role and
+RoleBinding in every watched namespace. For manifest-based installations, use
+`deploy/manifests/role.template` and `deploy/manifests/rolebinding.template` as
+starting points.
 
 ## Using AutoVPA
 
@@ -217,7 +222,7 @@ spec:
 | `--log-devel`                 | Enable development mode logging.                                        | `false`                                  | `AUTO_VPA_LOG_DEVEL`                 |
 
 \*) Variables are available in the template string: `.WorkloadName`, `.Namespace`, `.Kind`, `.Profile`.
-See [Func hints](#func-hints) for template helper details.
+See [template hints](#template-hints) for template helper details.
 
 ### Labels and annotations
 
