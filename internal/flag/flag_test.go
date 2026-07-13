@@ -76,7 +76,7 @@ func TestParseArgs(t *testing.T) {
 			"--config", "/tmp/profiles.yaml",
 			"--metrics-bind-address", ":9090",
 			"--health-probe-bind-address", ":9091",
-			"--leader-elect=true",
+			"--leader-elect=false",
 			"--metrics-enabled=false",
 			"--metrics-secure=false",
 			"--enable-http2=false",
@@ -95,7 +95,7 @@ func TestParseArgs(t *testing.T) {
 		assert.Equal(t, "/tmp/profiles.yaml", opts.ConfigPath)
 		assert.Equal(t, ":9090", opts.MetricsAddr)
 		assert.Equal(t, ":9091", opts.ProbeAddr)
-		assert.True(t, opts.LeaderElection)
+		assert.False(t, opts.LeaderElection)
 		assert.False(t, opts.EnableMetrics)
 		assert.False(t, opts.SecureMetrics)
 		assert.False(t, opts.EnableHTTP2)
