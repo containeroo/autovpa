@@ -238,25 +238,30 @@ See [template hints](#template-hints) for template helper details.
 ## Prometheus Metrics
 
 AutoVPA exposes counters for the VPAs it creates, updates, or skips while reconciling workloads.
+The always-present `autovpa_build_info` gauge identifies the running version and
+provides a stable signal for scrape-health alerts, even before any reconciliation occurs.
 
 ### Available Metrics
 
-1. **VPAs Created**
+1. **Build Information**
+   - **Metric:** `autovpa_build_info`
+   - **Labels:** `version`
+2. **VPAs Created**
    - **Metric:** `autovpa_vpa_created_total`
    - **Labels:** `namespace`, `name`, `kind`, `profile`
-2. **VPAs Updated**
+3. **VPAs Updated**
    - **Metric:** `autovpa_vpa_updated_total`
    - **Labels:** `namespace`, `name`, `kind`, `profile`
-3. **Workloads Skipped**
+4. **Workloads Skipped**
    - **Metric:** `autovpa_vpa_skipped_total`
    - **Labels:** `namespace`, `name`, `kind`, `reason`
-4. **Managed VPAs Deleted (cleanup)**
+5. **Managed VPAs Deleted (cleanup)**
    - **Metrics:** `autovpa_vpa_deleted_obsolete_total`, `autovpa_vpa_deleted_opt_out_total`, `autovpa_vpa_deleted_workload_gone_total`, `autovpa_vpa_deleted_owner_gone_total`, `autovpa_vpa_deleted_orphaned_total`
    - **Labels:** `namespace`, `kind` (or just `namespace` for orphaned)
-5. **Managed VPA Inventory**
+6. **Managed VPA Inventory**
    - **Metric:** `autovpa_managed_vpa`
    - **Labels:** `namespace`, `profile`
-6. **Reconcile Errors**
+7. **Reconcile Errors**
    - **Metric:** `autovpa_reconcile_errors_total`
    - **Labels:** `controller`, `kind`, `reason`
 

@@ -123,7 +123,7 @@ func Run(ctx context.Context, version string, args []string, stdOut, stdErr io.W
 		TLSOpts: tlsOpts,
 	})
 
-	metricsReg := internalmetrics.NewRegistry(crmetrics.Registry)
+	metricsReg := internalmetrics.NewRegistry(crmetrics.Registry, version)
 
 	metricsServerOptions := metricsserver.Options{
 		BindAddress: "0", // disabled by default

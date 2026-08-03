@@ -56,9 +56,31 @@ func resetAll(r *Registry) {
 	r.vpaReconcileErrors.Reset()
 }
 
+func TestRegistryBuildInfoExistsImmediately(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	NewRegistry(reg, "v1.2.3")
+
+	metricFamilies, err := reg.Gather()
+	assert.NoError(t, err)
+
+	for _, family := range metricFamilies {
+		if family.GetName() != "autovpa_build_info" {
+			continue
+		}
+		if assert.Len(t, family.Metric, 1) {
+			assert.Equal(t, float64(1), family.Metric[0].GetGauge().GetValue())
+			assert.Equal(t, "version", family.Metric[0].Label[0].GetName())
+			assert.Equal(t, "v1.2.3", family.Metric[0].Label[0].GetValue())
+		}
+		return
+	}
+
+	t.Fatal("autovpa_build_info metric was not gathered")
+}
+
 func TestRegistryMetrics_AllMethods(t *testing.T) {
 	withIsolatedPrometheusRegistry(t, func() {
-		r := NewRegistry(nil)
+		r := NewRegistry(nil, "test")
 		resetAll(r)
 		t.Cleanup(func() { resetAll(r) })
 

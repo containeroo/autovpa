@@ -384,7 +384,7 @@ func newTestVPAReconciler(t *testing.T, objs ...client.Object) *VPAReconciler {
 	logger := logr.Discard()
 
 	promReg := prometheus.NewRegistry()
-	metricsReg := internalmetrics.NewRegistry(promReg)
+	metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 	return &VPAReconciler{
 		KubeClient: c,

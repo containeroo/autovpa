@@ -94,7 +94,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		logger := logr.Discard()
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		cfg := &config.Config{
 			DefaultProfile: "p1",
@@ -148,7 +148,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		logger := logr.Discard()
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		cfg := &config.Config{
 			DefaultProfile: "p1",
@@ -203,7 +203,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		logger := logr.Discard()
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		cfg := &config.Config{
 			DefaultProfile: "p1",
@@ -309,7 +309,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		}
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := BaseReconciler{
 			KubeClient: client,
@@ -374,7 +374,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		}
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := BaseReconciler{
 			KubeClient: client,
@@ -458,7 +458,7 @@ func TestBaseReconciler_ReconcileWorkload(t *testing.T) {
 		}
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := BaseReconciler{
 			KubeClient: client,

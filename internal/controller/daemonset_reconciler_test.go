@@ -48,7 +48,7 @@ func TestDaemonSetReconciler_SetupWithManager(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	promReg := prometheus.NewRegistry()
-	metricsReg := internalmetrics.NewRegistry(promReg)
+	metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 	reconciler := &DaemonSetReconciler{
 		BaseReconciler: BaseReconciler{
@@ -74,7 +74,7 @@ func TestDaemonSetReconciler_Reconcile(t *testing.T) {
 
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := &DaemonSetReconciler{
 			BaseReconciler: BaseReconciler{
@@ -104,7 +104,7 @@ func TestDaemonSetReconciler_Reconcile(t *testing.T) {
 			GetErrorFor: testutils.NamedError{Name: "error-daemonset", Namespace: "test-namespace"},
 		}
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := &DaemonSetReconciler{
 			BaseReconciler: BaseReconciler{
@@ -144,7 +144,7 @@ func TestDaemonSetReconciler_Reconcile(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(daemonset).Build()
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := &DaemonSetReconciler{
 			BaseReconciler: BaseReconciler{

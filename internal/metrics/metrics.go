@@ -35,10 +35,19 @@ type Registry struct {
 
 // NewRegistry creates and registers all AutoVPA metrics with the provided
 // Prometheus registerer, allowing the metrics server to expose them automatically.
-func NewRegistry(reg prometheus.Registerer) *Registry {
+func NewRegistry(reg prometheus.Registerer, version string) *Registry {
 	if reg == nil {
 		reg = prometheus.DefaultRegisterer
 	}
+
+	buildInfo := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "autovpa_build_info",
+			Help: "Build information for the running AutoVPA process.",
+		},
+		[]string{"version"},
+	)
+	buildInfo.WithLabelValues(version).Set(1)
 
 	vpaCreated := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -121,6 +130,7 @@ func NewRegistry(reg prometheus.Registerer) *Registry {
 	)
 
 	reg.MustRegister(
+		buildInfo,
 		vpaCreated,
 		vpaUpdated,
 		vpaSkipped,

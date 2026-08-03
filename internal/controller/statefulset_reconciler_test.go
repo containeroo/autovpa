@@ -46,7 +46,7 @@ func TestStatefulSetReconciler_SetupWithManager(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	promReg := prometheus.NewRegistry()
-	metricsReg := internalmetrics.NewRegistry(promReg)
+	metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 	reconciler := &StatefulSetReconciler{
 		BaseReconciler: BaseReconciler{
@@ -71,7 +71,7 @@ func TestStatefulSetReconciler_Reconcile(t *testing.T) {
 		t.Parallel()
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 		reconciler := &StatefulSetReconciler{
@@ -103,7 +103,7 @@ func TestStatefulSetReconciler_Reconcile(t *testing.T) {
 		}
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := &StatefulSetReconciler{
 			BaseReconciler: BaseReconciler{
@@ -142,7 +142,7 @@ func TestStatefulSetReconciler_Reconcile(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(statefulset).Build()
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := &StatefulSetReconciler{
 			BaseReconciler: BaseReconciler{

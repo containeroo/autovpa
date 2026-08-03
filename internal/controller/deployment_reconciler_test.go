@@ -50,7 +50,7 @@ func TestDeploymentReconciler_SetupWithManager(t *testing.T) {
 	profiles := ProfileConfig{}
 
 	promReg := prometheus.NewRegistry()
-	metricsReg := internalmetrics.NewRegistry(promReg)
+	metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 	reconciler := &DeploymentReconciler{
 		BaseReconciler: BaseReconciler{
@@ -77,7 +77,7 @@ func TestDeploymentReconciler_Reconcile(t *testing.T) {
 		t.Parallel()
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		// Fake client with no resources
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -111,7 +111,7 @@ func TestDeploymentReconciler_Reconcile(t *testing.T) {
 		}
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := (&DeploymentReconciler{
 			BaseReconciler: BaseReconciler{
@@ -151,7 +151,7 @@ func TestDeploymentReconciler_Reconcile(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(deployment).Build()
 
 		promReg := prometheus.NewRegistry()
-		metricsReg := internalmetrics.NewRegistry(promReg)
+		metricsReg := internalmetrics.NewRegistry(promReg, "test")
 
 		reconciler := &DeploymentReconciler{
 			BaseReconciler: BaseReconciler{
