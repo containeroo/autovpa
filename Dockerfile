@@ -3,24 +3,23 @@
 # Build the manager binary.
 FROM golang:1.27 AS prep
 
-ARG TARGETOS
-ARG TARGETARCH
-ARG VERSION=dev
-ARG COMMIT=none
-ARG LDFLAGS="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}"
-
 ENV CGO_ENABLED=0
 
 WORKDIR /workspace
 
 # Copy the Go module manifests first so dependency downloads can be cached.
-COPY go.mod go.mod
-COPY go.sum go.sum
+COPY go.mod go.sum ./
 
-# Download modules before copying source files so source changes do not
-# invalidate the dependency cache layer.
+# Download modules before introducing build-specific arguments or source files.
+# This keeps the dependency layer stable across normal source and version changes.
 RUN --mount=type=cache,target=/go/pkg/mod \
   go mod download
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+ARG COMMIT=none
+ARG LDFLAGS="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT}"
 
 # Copy the Go source and templates.
 COPY cmd/ cmd/
@@ -52,6 +51,7 @@ COPY --from=prep /outfs/work /work
 COPY --from=prep /outfs/tmp /tmp
 
 ENV HOME=/tmp
+
 WORKDIR /work
 
 # Run as a non-root user by default.
