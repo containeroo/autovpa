@@ -30,23 +30,23 @@ const (
 
 // Options holds all configuration options for the application.
 type Options struct {
-	WatchNamespaces     []string       // Namespaces to watch
-	MetricsAddr         string         // Address for the metrics server
-	LeaderElection      bool           // Enable leader election
-	ProbeAddr           string         // Address for health and readiness probes
-	SecureMetrics       bool           // Serve metrics over HTTPS
-	EnableHTTP2         bool           // Enable HTTP/2 for servers
-	EnableMetrics       bool           // Enable or disable metrics
-	LogEncoder          string         // Log format: "json" or "console"
-	LogStacktraceLevel  string         // Stacktrace log level
-	LogDev              bool           // Enable development logging mode
-	ProfileAnnotation   string         // Annotation key workloads must set to request a profile.
-	ManagedLabel        string         // Label key to mark VPAs as managed by the operator.
-	DefaultNameTemplate string         // Template used to render managed VPA names; can be overridden per profile.
-	ConfigPath          string         // Path to the Config containing VPA profiles.
-	CRDCheck            bool           // Enable the check for the VPA CRD.
-	SkipManagerStart    bool           // Skip starting the manager (used by tests).
-	OverriddenValues    map[string]any // CLI overrides
+	WatchNamespaces     []string            // Namespaces to watch
+	MetricsAddr         string              // Address for the metrics server
+	LeaderElection      bool                // Enable leader election
+	ProbeAddr           string              // Address for health and readiness probes
+	SecureMetrics       bool                // Serve metrics over HTTPS
+	EnableHTTP2         bool                // Enable HTTP/2 for servers
+	EnableMetrics       bool                // Enable or disable metrics
+	LogEncoder          string              // Log format: "json" or "console"
+	LogStacktraceLevel  string              // Stacktrace log level
+	LogDev              bool                // Enable development logging mode
+	ProfileAnnotation   string              // Annotation key workloads must set to request a profile.
+	ManagedLabel        string              // Label key to mark VPAs as managed by the operator.
+	DefaultNameTemplate string              // Template used to render managed VPA names; can be overridden per profile.
+	ConfigPath          string              // Path to the Config containing VPA profiles.
+	CRDCheck            bool                // Enable the check for the VPA CRD.
+	SkipManagerStart    bool                // Skip starting the manager (used by tests).
+	Overrides           tinyflags.Overrides // CLI overrides
 }
 
 // ParseArgs parses CLI flags into Options and handles --help/--version output.
@@ -134,7 +134,7 @@ func ParseArgs(args []string, version string) (Options, error) {
 
 	opts.MetricsAddr = (*metricsBindAddress).String()
 	opts.ProbeAddr = (*healthProbeaddress).String()
-	opts.OverriddenValues = tf.OverriddenValues()
+	opts.Overrides = tf.Overrides()
 
 	return opts, nil
 }
