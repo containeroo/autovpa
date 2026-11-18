@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">AutoVPA logo</title>
+  <desc id="desc">Three rising resource bars inside a Kubernetes-inspired hexagon, encircled by a reconciliation arrow.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101F42"/>
+      <stop offset="1" stop-color="#081326"/>
+    </linearGradient>
+    <linearGradient id="bars" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#3E83F7"/>
+      <stop offset="0.52" stop-color="#4FB5F1"/>
+      <stop offset="1" stop-color="#51E3CE"/>
+    </linearGradient>
+    <linearGradient id="orbit" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#387BF6"/>
+      <stop offset="1" stop-color="#55E8D1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark, rounded app badge, legible on GitHub in either theme. -->
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#background)"/>
+  <rect x="9.5" y="9.5" width="493" height="493" rx="110.5" fill="none" stroke="#5483C4" stroke-opacity=".22" stroke-width="3"/>
+
+  <!-- Subtle Kubernetes-style cluster boundary. -->
+  <path d="M256 88 402 172 V340 L256 424 110 340 V172Z" fill="#1C3961" fill-opacity=".22" stroke="#488BD6" stroke-opacity=".27" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- Three vertical resource levels. -->
+  <g fill="url(#bars)">
+    <rect x="153" y="282" width="59" height="92" rx="14"/>
+    <rect x="226" y="245" width="59" height="129" rx="14"/>
+    <rect x="299" y="205" width="59" height="169" rx="14"/>
+  </g>
+  <g stroke="#E8FFFF" stroke-width="6" stroke-linecap="round" opacity=".64">
+    <path d="M168 301h23"/>
+    <path d="M241 264h23"/>
+    <path d="M314 224h23"/>
+  </g>
+
+  <!-- Reconciliation loop: continuously keep VPA aligned to the chosen profile. -->
+  <path d="M144 230c12-62 65-104 129-104 51 0 94 25 119 64" fill="none" stroke="url(#orbit)" stroke-width="18" stroke-linecap="round"/>
+  <path d="m370 182 29 26 8-38" fill="none" stroke="#52E0D3" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Pod baseline reinforces the vertical (not horizontal) resource axis. -->
+  <path d="M153 391h205" stroke="#8CBDEB" stroke-opacity=".55" stroke-width="9" stroke-linecap="round"/>
+</svg>

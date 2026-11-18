@@ -1,6 +1,9 @@
 # AutoVPA
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/containeroo/autovpa?style=flat-square)](https://goreportcard.com/report/github.com/containeroo/autovpa)
+<p align="center">
+  <img src="assets/autovpa.svg" alt="AutoVPA" width="200" />
+</p>
+
 [![Go Doc](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://godoc.org/github.com/containeroo/autovpa)
 [![Release](https://img.shields.io/github/release/containeroo/autovpa.svg?style=flat-square)](https://github.com/containeroo/autovpa/releases/latest)
 [![GitHub tag](https://img.shields.io/github/tag/containeroo/autovpa.svg?style=flat-square)](https://github.com/containeroo/autovpa/releases/latest)
